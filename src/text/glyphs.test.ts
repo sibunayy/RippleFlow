@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
-import { layoutText, setFontData } from "./glyphs";
+import { fontLoaded, layoutText, setFontData } from "./glyphs";
 import { DEFAULT_ANIMATOR, textUnits, unitStates } from "../core/text";
 import { buildLayerGeometry } from "../geometry/layerGeometry";
 import { evaluateScene } from "../core/scene";
@@ -65,5 +65,21 @@ describe("animated text geometry and scene", () => {
     const comp = (l: Layer): Composition => ({ width: 100, height: 100, fps: 30, duration: 2, layers: [l] });
     expect(evaluateScene(comp(layer(content({ animator: DEFAULT_ANIMATOR }))), 0.1)[0]!.units).toHaveLength(5);
     expect(evaluateScene(comp(layer(content())), 0.1)[0]!.units).toBeUndefined();
+  });
+});
+
+describe("multiple fonts", () => {
+  it("lays out with the font named by content.font and parses WOFF", () => {
+    for (const [id, file] of [["poppins", "Poppins-Bold.woff"], ["bebas", "BebasNeue-Regular.woff"], ["playfair", "PlayfairDisplay-Bold.woff"], ["pacifico", "Pacifico-Regular.woff"], ["spacemono", "SpaceMono-Bold.woff"]] as const) {
+      const b = readFileSync(new URL(`./fonts/${file}`, import.meta.url));
+      setFontData(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer, id);
+      expect(fontLoaded(id)).toBe(true);
+    }
+    const paths = [undefined, "poppins", "bebas", "playfair", "pacifico", "spacemono"].map((f) => layoutText(content({ text: "Rag", ...(f ? { font: f } : {}) })).path);
+    expect(paths.every((p) => p.length > 0)).toBe(true);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+  it("lays out nothing for a font that is not loaded", () => {
+    expect(layoutText(content({ font: "nope" })).path).toBe("");
   });
 });

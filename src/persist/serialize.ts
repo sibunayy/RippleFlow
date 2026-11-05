@@ -125,6 +125,7 @@ function text(v: unknown, what: string): TextContent {
   if (size <= 0) fail(`${what}.size must be positive`);
   const align = (["left", "center", "right"] as const).find((a) => a === v.align) ?? fail(`${what}.align`);
   const out: { -readonly [K in keyof TextContent]: TextContent[K] } = { text: str(v.text, `${what}.text`), size, tracking: num(v.tracking, `${what}.tracking`), align };
+  if (v.font !== undefined) out.font = str(v.font, `${what}.font`);
   if (v.animator !== undefined) {
     const a = v.animator;
     if (!isObj(a) || !isObj(a.from)) return fail(`${what}.animator must be an object with from`);

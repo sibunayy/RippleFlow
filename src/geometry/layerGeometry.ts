@@ -195,7 +195,7 @@ export function buildTextGeometry(shape: ShapeContent, units: readonly LaidOutUn
 }
 
 export function buildLayerGeometry(layer: Layer, bitmapOf: (asset: string) => ImageBitmap | undefined): ShapeGeometry | undefined {
-  if (layer.shape && layer.text?.animator && fontLoaded()) return buildTextGeometry(layer.shape, layoutText(layer.text).units);
+  if (layer.shape && layer.text?.animator && fontLoaded(layer.text.font)) return buildTextGeometry(layer.shape, layoutText(layer.text).units);
   if (layer.shape) return buildShapeGeometry(layer.shape);
   if (layer.image) return buildImageGeometry(layer.image, bitmapOf(layer.image.asset));
   if (layer.video) return buildVideoGeometry(layer.video);

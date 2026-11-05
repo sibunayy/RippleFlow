@@ -1,8 +1,10 @@
-import { For, Show } from "solid-js";
+import { For, Show, createEffect } from "solid-js";
 import type { Command } from "../core/history";
 import { DEFAULT_ANIMATOR } from "../core/text";
 import type { Bezier, Layer, TextAnimator, TextUnit } from "../core/types";
 import type { EditorController } from "../editor/controller";
+import { DEFAULT_FONT } from "../text/glyphs";
+import { ensureFont, FONTS } from "../text/fonts";
 import { editAnimator, editText, removeAnimator, setText } from "../text/textEdit";
 import { ScrubField } from "./ScrubField";
 
@@ -38,6 +40,15 @@ export function TextPanel(props: { ctrl: EditorController; tick: () => number; l
       /* not shown */
     }
   };
+  // A reopened project's font loads on demand; edits wait for it (layout needs the font, drawing does not).
+  createEffect(() => {
+    const f = props.layer().text?.font;
+    if (f) void ensureFont(f);
+  });
+  const pickFont = async (fid: string) => {
+    if (!(await ensureFont(fid))) return props.notify("Could not load that font");
+    run(editText(id(), "Text font", (x) => (fid === DEFAULT_FONT ? ((({ font: _f, ...rest }) => rest)(x) as typeof x) : { ...x, font: fid })));
+  };
   const anim = () => t().animator;
   const patchA = (label: string, p: Partial<TextAnimator>) => editAnimator(id(), label, (a) => ({ ...a, ...p }));
   const patchFrom = (label: string, p: Partial<TextAnimator["from"]>) => editAnimator(id(), label, (a) => ({ ...a, from: { ...a.from, ...p } }));
@@ -56,6 +67,12 @@ export function TextPanel(props: { ctrl: EditorController; tick: () => number; l
           onInput={(e) => preview(setText(id(), e.currentTarget.value))}
           onChange={(e) => run(setText(id(), e.currentTarget.value))}
         />
+        <label class="seg">
+          <span class="scrub-label">Font</span>
+          <select class="font-select" value={(props.tick(), t().font ?? DEFAULT_FONT)} onChange={(e) => void pickFont(e.currentTarget.value)}>
+            <For each={FONTS}>{(f) => <option value={f.id} selected={(props.tick(), (t().font ?? DEFAULT_FONT) === f.id)}>{f.label}</option>}</For>
+          </select>
+        </label>
         {num("Size", () => (props.tick(), t().size), 1, (v) => editText(id(), "Text size", (x) => ({ ...x, size: Math.max(1, v) })), { min: 1, max: 1000 })}
         {num("Tracking", () => (props.tick(), t().tracking), 0.5, (v) => editText(id(), "Text tracking", (x) => ({ ...x, tracking: v })), { min: -100, max: 400 })}
         <div class="seg" role="group" aria-label="Align">
