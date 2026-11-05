@@ -14,7 +14,7 @@ const mb = (bytes: number) => (bytes < 1_000_000 ? `${Math.max(1, Math.round(byt
  * Export flow: pick a preset, render, then a Save button. The share sheet needs a
  * fresh tap (Safari rejects share() long after the gesture), so saving is its own step.
  */
-export function ExportDialog(props: { comp: () => Composition; onClose: () => void }) {
+export function ExportDialog(props: { comp: () => Composition; bitmapOf: (asset: string) => ImageBitmap | undefined; onClose: () => void }) {
   const [preset, setPreset] = createSignal<ExportPreset>(PRESETS[1]!);
   const [phase, setPhase] = createSignal<Phase>({ kind: "idle" });
   const [saveNote, setSaveNote] = createSignal<string | null>(null);
@@ -40,6 +40,7 @@ export function ExportDialog(props: { comp: () => Composition; onClose: () => vo
       const r = await exportComposition(comp, {
         preset: preset(),
         signal: abort.signal,
+        bitmapOf: props.bitmapOf,
         onProgress: (done, total) => setPhase({ kind: "running", done, total }),
       });
       const file = new File([r.blob], "rippleflow.mp4", { type: "video/mp4" });

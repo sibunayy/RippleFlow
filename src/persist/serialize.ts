@@ -1,4 +1,4 @@
-import type { Bezier, Composition, Keyframe, Layer, Rgba, ShapeContent, Track, Transform } from "../core/types";
+import type { Bezier, Composition, ImageContent, Keyframe, Layer, Rgba, ShapeContent, Track, Transform } from "../core/types";
 
 /** Bump when the stored shape changes, and add a step to `migrate`. */
 export const FORMAT_VERSION = 1;
@@ -73,6 +73,13 @@ function shape(v: unknown, what: string): ShapeContent {
   return out;
 }
 
+function image(v: unknown, what: string): ImageContent {
+  if (!isObj(v)) return fail(`${what} must be an object`);
+  const asset = str(v.asset, `${what}.asset`);
+  if (!/^[0-9a-f]{16,64}$/.test(asset)) fail(`${what}.asset must be a lowercase hex content hash`);
+  return { asset, width: pos(v.width, `${what}.width`), height: pos(v.height, `${what}.height`) };
+}
+
 function layer(v: unknown, i: number): Layer {
   const what = `layers[${i}]`;
   if (!isObj(v)) return fail(`${what} must be an object`);
@@ -83,6 +90,8 @@ function layer(v: unknown, i: number): Layer {
   const out: { -readonly [K in keyof Layer]: Layer[K] } = { id: str(v.id, `${what}.id`), name: str(v.name, `${what}.name`), kind, transform };
   if (v.parent !== undefined) out.parent = str(v.parent, `${what}.parent`);
   if (v.shape !== undefined) out.shape = shape(v.shape, `${what}.shape`);
+  if (v.image !== undefined) out.image = image(v.image, `${what}.image`);
+  if (kind === "image" && !out.image) fail(`${what} is an image layer without image content`);
   if (v.inPoint !== undefined) out.inPoint = num(v.inPoint, `${what}.inPoint`);
   if (v.outPoint !== undefined) out.outPoint = num(v.outPoint, `${what}.outPoint`);
   return out;

@@ -10,7 +10,16 @@ export interface Draw {
   transform?: Affine;
   /** Multiplies the color's alpha. Defaults to 1. */
   opacity?: number;
+  /**
+   * Draw this image across the mesh instead of a flat color. Texture coordinates
+   * are the vertex positions divided by the mesh's maximum x and y, so a
+   * rectangle from (0,0) to (w,h) shows the whole image. `color` is ignored.
+   */
+  image?: ImageBitmap;
 }
+
+/** A draw whose transform and opacity are both set. */
+export type PlacedDraw = Draw & { transform: Affine; opacity: number };
 
 const SHADER = /* wgsl */ `
 // m0 = (a, b, c, d), m1 = (e, f, _, _): x' = a*x + c*y + e, y' = b*x + d*y + f
@@ -30,6 +39,31 @@ fn fs() -> @location(0) vec4f {
 }
 `;
 
+// Same vertex stage; `pad` carries the mesh extent so uv = position / extent.
+const TEXTURED_SHADER = /* wgsl */ `
+struct U { size: vec2f, extent: vec2f, color: vec4f, m0: vec4f, m1: vec4f }
+@group(0) @binding(0) var<uniform> u: U;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var img: texture_2d<f32>;
+
+struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
+
+@vertex
+fn vs(@location(0) p: vec2f) -> VOut {
+  let w = vec2f(u.m0.x * p.x + u.m0.z * p.y + u.m1.x, u.m0.y * p.x + u.m0.w * p.y + u.m1.y);
+  var o: VOut;
+  o.pos = vec4f(w.x / u.size.x * 2.0 - 1.0, 1.0 - w.y / u.size.y * 2.0, 0.0, 1.0);
+  o.uv = p / u.extent;
+  return o;
+}
+
+@fragment
+fn fs(i: VOut) -> @location(0) vec4f {
+  // The texture is stored premultiplied, so fading is a plain multiply.
+  return textureSample(img, samp, i.uv) * u.color.a;
+}
+`;
+
 const SAMPLES = 4;
 
 interface Gpu {
@@ -43,6 +77,9 @@ interface Prepared {
   ubuf: GPUBuffer;
   bind: GPUBindGroup;
   count: number;
+  /** Mesh extent (max x, max y) for texture coordinates; only used by image draws. */
+  extent: [number, number];
+  textured: boolean;
   color: Draw["color"];
   transform: Affine;
   opacity: number;
@@ -50,6 +87,10 @@ interface Prepared {
 
 export class MeshRenderer {
   private pipeline: GPURenderPipeline;
+  private texturedPipeline: GPURenderPipeline;
+  private sampler: GPUSampler;
+  /** Uploaded images by bitmap identity, so editing other layers never re-uploads a photo. */
+  private textures = new Map<ImageBitmap, GPUTexture>();
   private msaa?: GPUTexture;
   private prepared: Prepared[] = [];
   /** Background the frame is cleared to. Use alpha 1 for video export. */
@@ -87,6 +128,46 @@ export class MeshRenderer {
       primitive: { topology: "triangle-list", cullMode: "none" },
       multisample: { count: SAMPLES },
     });
+
+    const texModule = device.createShaderModule({ code: TEXTURED_SHADER });
+    this.texturedPipeline = device.createRenderPipeline({
+      layout: "auto",
+      vertex: {
+        module: texModule,
+        entryPoint: "vs",
+        buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }],
+      },
+      fragment: {
+        module: texModule,
+        entryPoint: "fs",
+        targets: [
+          {
+            format,
+            blend: {
+              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
+              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
+            },
+          },
+        ],
+      },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      multisample: { count: SAMPLES },
+    });
+    this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
+  }
+
+  private textureFor(bitmap: ImageBitmap): GPUTexture {
+    let tex = this.textures.get(bitmap);
+    if (!tex) {
+      tex = this.gpu.device.createTexture({
+        size: [bitmap.width, bitmap.height],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      this.gpu.device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: tex, premultipliedAlpha: true }, [bitmap.width, bitmap.height]);
+      this.textures.set(bitmap, tex);
+    }
+    return tex;
   }
 
   static async create(canvas: HTMLCanvasElement): Promise<MeshRenderer> {
@@ -124,15 +205,35 @@ export class MeshRenderer {
         });
         device.queue.writeBuffer(ibuf, 0, d.mesh.indices as Uint32Array<ArrayBuffer>);
         const ubuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        const bind = device.createBindGroup({
-          layout: this.pipeline.getBindGroupLayout(0),
-          entries: [{ binding: 0, resource: { buffer: ubuf } }],
-        });
+        const textured = !!d.image;
+        const bind = textured
+          ? device.createBindGroup({
+              layout: this.texturedPipeline.getBindGroupLayout(0),
+              entries: [
+                { binding: 0, resource: { buffer: ubuf } },
+                { binding: 1, resource: this.sampler },
+                { binding: 2, resource: this.textureFor(d.image!).createView() },
+              ],
+            })
+          : device.createBindGroup({
+              layout: this.pipeline.getBindGroupLayout(0),
+              entries: [{ binding: 0, resource: { buffer: ubuf } }],
+            });
+        let ex = 0;
+        let ey = 0;
+        if (textured) {
+          for (let i = 0; i < d.mesh.positions.length; i += 2) {
+            ex = Math.max(ex, d.mesh.positions[i]!);
+            ey = Math.max(ey, d.mesh.positions[i + 1]!);
+          }
+        }
         return {
           vbuf,
           ibuf,
           ubuf,
           bind,
+          extent: [ex || 1, ey || 1] as [number, number],
+          textured,
           count: d.mesh.indices.length,
           color: d.color,
           transform: d.transform ?? IDENTITY,
@@ -170,6 +271,8 @@ export class MeshRenderer {
       p.ubuf.destroy();
     }
     this.prepared = [];
+    for (const t of this.textures.values()) t.destroy();
+    this.textures.clear();
     this.msaa?.destroy();
     this.gpu.device.destroy();
   }
@@ -206,11 +309,16 @@ export class MeshRenderer {
         },
       ],
     });
-    pass.setPipeline(this.pipeline);
+    let current: GPURenderPipeline | null = null;
     for (const p of this.prepared) {
+      const want = p.textured ? this.texturedPipeline : this.pipeline;
+      if (want !== current) {
+        pass.setPipeline(want);
+        current = want;
+      }
       const [a, b, c, d, e, f] = p.transform;
-      const [r, g, bl, al] = p.color;
-      device.queue.writeBuffer(p.ubuf, 0, new Float32Array([w, h, 0, 0, r, g, bl, al * p.opacity, a, b, c, d, e, f, 0, 0]));
+      const [r, g, bl, al] = p.textured ? [1, 1, 1, 1] : p.color;
+      device.queue.writeBuffer(p.ubuf, 0, new Float32Array([w, h, p.extent[0], p.extent[1], r, g, bl, al * p.opacity, a, b, c, d, e, f, 0, 0]));
       pass.setBindGroup(0, p.bind);
       pass.setVertexBuffer(0, p.vbuf);
       pass.setIndexBuffer(p.ibuf, "uint32");
