@@ -25,8 +25,19 @@ export function decompose(m: Affine, anchorX: number, anchorY: number, prevRotat
   return { x, y, scaleX: sx, scaleY: sy, rotation: rot };
 }
 
-function writeTrack(track: Track, t: number, value: number, autoKey: boolean, id: string): Track {
+/**
+ * Write `value` for time `t`. `before` is the property's value at `t` before this edit.
+ *
+ * With auto-key (or an already animated track) this sets a keyframe at `t`. The first
+ * keyframe of a property that has none, made after time 0, also gets a keyframe at 0
+ * holding `before`: a lone keyframe would just hold its value for all time, so the
+ * edit would change the property everywhere and nothing would animate.
+ */
+function writeTrack(track: Track, t: number, value: number, autoKey: boolean, id: string, before: number): Track {
   if (autoKey || track.keys.length > 1) {
+    if (autoKey && track.keys.length === 0 && t > 1e-9) {
+      return { keys: [{ id: id.replace(/@.*$/, "@0"), t: 0, value: before }, { id, t, value }] };
+    }
     const prior = track.keys.find((k) => Math.abs(k.t - t) <= 1e-9);
     const keys = track.keys.filter((k) => k !== prior);
     keys.push({ id, t, value, ...(prior?.ease ? { ease: prior.ease } : {}) });
@@ -66,7 +77,7 @@ export function applyWorldDelta(comp: Composition, layerId: Id, delta: Affine, t
   for (const prop of Object.keys(DEFAULTS) as Prop[]) {
     const cur = evalTrack(tr[prop], t, DEFAULTS[prop]);
     if (Math.abs(cur - next[prop]) <= EPS) continue;
-    transform = { ...transform, [prop]: writeTrack(tr[prop], t, next[prop], autoKey, `${layerId}.${prop}@${t}`) };
+    transform = { ...transform, [prop]: writeTrack(tr[prop], t, next[prop], autoKey, `${layerId}.${prop}@${t}`, cur) };
   }
   if (transform === tr) return comp;
   const updated: Layer = { ...layer, transform };
@@ -88,8 +99,9 @@ export function setPropValue(layerId: Id, prop: EditableProp, value: number, t: 
       if (!layer) throw new Error(`Unknown layer ${layerId}`);
       const v = prop === "opacity" ? Math.min(1, Math.max(0, value)) : value;
       if (!Number.isFinite(v)) return comp;
-      if (Math.abs(propValue(layer, prop, t) - v) <= EPS) return comp;
-      const transform: Transform = { ...layer.transform, [prop]: writeTrack(layer.transform[prop], t, v, autoKey, `${layerId}.${prop}@${t}`) };
+      const before = propValue(layer, prop, t);
+      if (Math.abs(before - v) <= EPS) return comp;
+      const transform: Transform = { ...layer.transform, [prop]: writeTrack(layer.transform[prop], t, v, autoKey, `${layerId}.${prop}@${t}`, before) };
       return { ...comp, layers: comp.layers.map((l) => (l.id === layerId ? { ...layer, transform } : l)) };
     },
   };

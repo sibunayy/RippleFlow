@@ -69,3 +69,6 @@ Not verified anywhere: the `importExternalTexture` video draw inside the real ed
 Container gotchas: the software GPU cannot read back a buffer while a canvas is being presented, so test pages use `?debug&noloop` and the `window.__rf` hook (no canvas present, manual frames).
 
 Export colour: the encoder's own colour tags cannot be trusted (Safari tags full range on limited-range data). The exporter feeds NV12 it converted itself and writes its own `colr`; check any export change with ffprobe tags plus native Y of a white backdrop (expect 235, `tv`).
+
+Auto-key: a property with no keys gets a base keyframe at 0 holding its old value before its first keyframe after time 0 (a lone keyframe would just hold its value at every time and nothing would animate). Position already had a base key from layer creation, which is why it was the only property that animated before this was fixed.
+The toolbar shows the build id (git short sha), so a device can say which version produced a file.

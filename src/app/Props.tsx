@@ -43,6 +43,18 @@ export function Props(props: { ctrl: EditorController; tick: () => number }) {
                     e.currentTarget.value = String(+(propValue(props.ctrl.document.layers.find((x) => x.id === l().id)!, f.prop, props.ctrl.time) * f.mul).toFixed(2));
                   }}
                 />
+                <Show when={f.prop === "opacity"}>
+                  {/* A slider is hard to get wrong (the number box is in percent: 0.5 means 0.5%). Commits on release, one undo step. */}
+                  <input
+                    type="range"
+                    class="slider"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={Math.round((props.tick(), propValue(l(), "opacity", props.ctrl.time)) * 100)}
+                    onChange={(e) => props.ctrl.execute(setPropValue(l().id, "opacity", e.currentTarget.valueAsNumber / 100, props.ctrl.time, props.ctrl.autoKey))}
+                  />
+                </Show>
               </label>
             )}
           </For>
