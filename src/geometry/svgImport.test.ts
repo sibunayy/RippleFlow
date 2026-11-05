@@ -41,3 +41,32 @@ describe("svg import", () => {
     expect(parseTransform("translate(5) scale(2)")).toEqual([2, 0, 0, 2, 5, 0]);
   });
 });
+
+describe("svg gradients", () => {
+  const svg = (def: string, shape = '<rect width="100" height="50" fill="url(#g)"/>') => importSvg(`<svg viewBox="0 0 100 50"><defs>${def}</defs>${shape}</svg>`);
+  it("converts a horizontal linear gradient", () => {
+    const r = svg('<linearGradient id="g"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f"/></linearGradient>');
+    const g = r.shapes[0]!.gradient!;
+    expect(g.kind).toBe("linear");
+    expect(g.angle).toBeCloseTo(0);
+    expect(g.stops.map((s) => s.offset)).toEqual([0, 1]);
+    expect(g.stops[1]!.color).toEqual([0, 0, 1, 1]);
+    expect(r.skipped).toEqual([]);
+  });
+  it("handles userSpaceOnUse vertical gradients that cover half the shape", () => {
+    const r = svg('<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="25"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>');
+    const g = r.shapes[0]!.gradient!;
+    expect(g.angle).toBeCloseTo(90);
+    expect(g.stops[1]!.offset).toBeCloseTo(0.5);
+  });
+  it("follows href for stops and reads stop-opacity from style", () => {
+    const r = svg('<linearGradient id="base"><stop offset="0" style="stop-color:#0f0;stop-opacity:.5"/><stop offset="100%" stop-color="#000"/></linearGradient><linearGradient id="g" href="#base" x2="0" y2="1"/>');
+    const g = r.shapes[0]!.gradient!;
+    expect(g.stops[0]!.color).toEqual([0, 1, 0, 0.5]);
+    expect(g.angle).toBeCloseTo(90);
+  });
+  it("converts radial gradients", () => {
+    const r = svg('<radialGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>');
+    expect(r.shapes[0]!.gradient!.kind).toBe("radial");
+  });
+});

@@ -3,6 +3,8 @@ import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="#ff0000"/><circle cx="50" cy="50" r="25" fill="#0000ff"/></svg>`;
+const gsvg = `<svg viewBox="0 0 100 100"><defs><linearGradient id="g"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/></svg>`;
+writeFileSync("/tmp/rf-grad.svg", gsvg);
 const file = "/tmp/rf-test.svg"; writeFileSync(file, svg);
 const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
@@ -23,6 +25,15 @@ const bb = await page.evaluate(async () => {
 });
 const wr = bb.r[1] - bb.r[0] + 1, wb = bb.b[1] - bb.b[0] + 1;
 console.log(Math.abs(wb / wr - 0.5) < 0.02 ? "PASS" : "FAIL", "circle is half the square's width", wb, wr, "centred:", Math.abs((bb.r[0] + bb.r[1]) / 2 - (bb.b[0] + bb.b[1]) / 2) < 2);
+await page.evaluate(() => window.__rf.ctrl.undo());
+await page.locator('input[accept=".svg,image/svg+xml"]').setInputFiles("/tmp/rf-grad.svg"); await page.waitForTimeout(500);
+const g = await page.evaluate(async () => {
+  const { ctrl, renderer } = window.__rf; ctrl.setTime(0); window.__rf.frame();
+  const r = await renderer.readPixels(); const row = (r.height >> 1) * r.width;
+  const xs = []; for (let x = 0; x < r.width; x++) { const i = (row + x) * 4; if (r.data[i + 1] < 10 && r.data[i] + r.data[i + 2] > 200) xs.push([r.data[i], r.data[i + 2]]); }
+  return { grad: ctrl.document.layers.at(-1).shape.gradient?.kind, first: xs[8], last: xs[xs.length - 9] };
+});
+console.log(g.grad === "linear" && g.first[0] > g.first[1] && g.last[1] > g.last[0] ? "PASS" : "FAIL", "gradient red->blue", JSON.stringify(g));
 await page.evaluate(() => window.__rf.ctrl.undo());
 console.log("undo layers:", await page.evaluate(() => window.__rf.ctrl.document.layers.length));
 console.log("errors:", errors.length ? errors : "none");
