@@ -1,4 +1,4 @@
-import type { Bezier, Composition, ImageContent, Keyframe, Layer, Rgba, ShapeContent, Track, Transform } from "../core/types";
+import type { Bezier, Composition, ImageContent, Keyframe, Layer, Rgba, ShapeContent, Track, Transform, VideoContent } from "../core/types";
 
 /** Bump when the stored shape changes, and add a step to `migrate`. */
 export const FORMAT_VERSION = 1;
@@ -80,6 +80,21 @@ function image(v: unknown, what: string): ImageContent {
   return { asset, width: pos(v.width, `${what}.width`), height: pos(v.height, `${what}.height`) };
 }
 
+function video(v: unknown, what: string): VideoContent {
+  if (!isObj(v)) return fail(`${what} must be an object`);
+  const asset = str(v.asset, `${what}.asset`);
+  if (!/^[0-9a-f]{16,64}$/.test(asset)) fail(`${what}.asset must be a lowercase hex content hash`);
+  const rotation = ([0, 90, 180, 270] as const).find((r) => r === v.rotation) ?? fail(`${what}.rotation must be 0, 90, 180 or 270`);
+  return {
+    asset,
+    codedWidth: pos(v.codedWidth, `${what}.codedWidth`),
+    codedHeight: pos(v.codedHeight, `${what}.codedHeight`),
+    rotation,
+    duration: pos(v.duration, `${what}.duration`),
+    start: num(v.start, `${what}.start`),
+  };
+}
+
 function layer(v: unknown, i: number): Layer {
   const what = `layers[${i}]`;
   if (!isObj(v)) return fail(`${what} must be an object`);
@@ -91,6 +106,8 @@ function layer(v: unknown, i: number): Layer {
   if (v.parent !== undefined) out.parent = str(v.parent, `${what}.parent`);
   if (v.shape !== undefined) out.shape = shape(v.shape, `${what}.shape`);
   if (v.image !== undefined) out.image = image(v.image, `${what}.image`);
+  if (v.video !== undefined) out.video = video(v.video, `${what}.video`);
+  if (kind === "video" && !out.video) fail(`${what} is a video layer without video content`);
   if (kind === "image" && !out.image) fail(`${what} is an image layer without image content`);
   if (v.inPoint !== undefined) out.inPoint = num(v.inPoint, `${what}.inPoint`);
   if (v.outPoint !== undefined) out.outPoint = num(v.outPoint, `${what}.outPoint`);

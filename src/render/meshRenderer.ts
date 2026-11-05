@@ -16,6 +16,12 @@ export interface Draw {
    * rectangle from (0,0) to (w,h) shows the whole image. `color` is ignored.
    */
   image?: ImageBitmap;
+  /**
+   * Draw this decoded video frame across the mesh (same texture coordinates as
+   * `image`). Sampled through an external texture, which also does the YUV to RGB
+   * conversion. Replace it every frame with `setFrame`; the renderer never closes it.
+   */
+  frame?: VideoFrame;
 }
 
 /** A draw whose transform and opacity are both set. */
@@ -64,6 +70,10 @@ fn fs(i: VOut) -> @location(0) vec4f {
 }
 `;
 
+// Video frames come in as an external texture (YUV handled by the browser). Opaque, so opacity is the only alpha.
+const EXTERNAL_SHADER = TEXTURED_SHADER.replace("texture_2d<f32>", "texture_external")
+  .replace("textureSample(img, samp, i.uv) * u.color.a", "vec4f(textureSampleBaseClampToEdge(img, samp, i.uv).rgb, 1.0) * u.color.a");
+
 const SAMPLES = 4;
 
 interface Gpu {
@@ -75,11 +85,14 @@ interface Prepared {
   vbuf: GPUBuffer;
   ibuf: GPUBuffer;
   ubuf: GPUBuffer;
-  bind: GPUBindGroup;
+  bind?: GPUBindGroup;
   count: number;
   /** Mesh extent (max x, max y) for texture coordinates; only used by image draws. */
   extent: [number, number];
   textured: boolean;
+  /** Current video frame; the draw is skipped until one is set. */
+  external: boolean;
+  frame?: VideoFrame;
   color: Draw["color"];
   transform: Affine;
   opacity: number;
@@ -88,6 +101,7 @@ interface Prepared {
 export class MeshRenderer {
   private pipeline: GPURenderPipeline;
   private texturedPipeline: GPURenderPipeline;
+  private externalPipeline: GPURenderPipeline;
   private sampler: GPUSampler;
   /** Uploaded images by bitmap identity, so editing other layers never re-uploads a photo. */
   private textures = new Map<ImageBitmap, GPUTexture>();
@@ -139,6 +153,30 @@ export class MeshRenderer {
       },
       fragment: {
         module: texModule,
+        entryPoint: "fs",
+        targets: [
+          {
+            format,
+            blend: {
+              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
+              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
+            },
+          },
+        ],
+      },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      multisample: { count: SAMPLES },
+    });
+    const extModule = device.createShaderModule({ code: EXTERNAL_SHADER });
+    this.externalPipeline = device.createRenderPipeline({
+      layout: "auto",
+      vertex: {
+        module: extModule,
+        entryPoint: "vs",
+        buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }],
+      },
+      fragment: {
+        module: extModule,
         entryPoint: "fs",
         targets: [
           {
@@ -206,7 +244,10 @@ export class MeshRenderer {
         device.queue.writeBuffer(ibuf, 0, d.mesh.indices as Uint32Array<ArrayBuffer>);
         const ubuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         const textured = !!d.image;
-        const bind = textured
+        const external = !!d.frame;
+        const bind = external
+          ? undefined
+          : textured
           ? device.createBindGroup({
               layout: this.texturedPipeline.getBindGroupLayout(0),
               entries: [
@@ -219,9 +260,10 @@ export class MeshRenderer {
               layout: this.pipeline.getBindGroupLayout(0),
               entries: [{ binding: 0, resource: { buffer: ubuf } }],
             });
+        const isImage = textured || external;
         let ex = 0;
         let ey = 0;
-        if (textured) {
+        if (isImage) {
           for (let i = 0; i < d.mesh.positions.length; i += 2) {
             ex = Math.max(ex, d.mesh.positions[i]!);
             ey = Math.max(ey, d.mesh.positions[i + 1]!);
@@ -234,12 +276,29 @@ export class MeshRenderer {
           bind,
           extent: [ex || 1, ey || 1] as [number, number],
           textured,
+          external,
+          frame: d.frame,
           count: d.mesh.indices.length,
           color: d.color,
           transform: d.transform ?? IDENTITY,
           opacity: d.opacity ?? 1,
         };
       });
+    // Free pictures that no draw uses any more (deleted layers, replaced video-frame bitmaps).
+    const live = new Set(draws.map((d) => d.image).filter((i): i is ImageBitmap => !!i));
+    for (const [bitmap, tex] of this.textures) {
+      if (!live.has(bitmap)) {
+        tex.destroy();
+        this.textures.delete(bitmap);
+      }
+    }
+  }
+
+  /** Swap the video frame of draw `index` (a draw created with `frame`). Cheap: no geometry upload. */
+  setFrame(index: number, frame: VideoFrame | undefined): void {
+    const p = this.prepared[index];
+    if (!p || !p.external) throw new Error(`Draw ${index} is not a video draw`);
+    p.frame = frame;
   }
 
   get format(): GPUTextureFormat {
@@ -311,15 +370,28 @@ export class MeshRenderer {
     });
     let current: GPURenderPipeline | null = null;
     for (const p of this.prepared) {
-      const want = p.textured ? this.texturedPipeline : this.pipeline;
+      if (p.external && !p.frame) continue; // no decoded frame yet
+      const want = p.external ? this.externalPipeline : p.textured ? this.texturedPipeline : this.pipeline;
       if (want !== current) {
         pass.setPipeline(want);
         current = want;
       }
       const [a, b, c, d, e, f] = p.transform;
-      const [r, g, bl, al] = p.textured ? [1, 1, 1, 1] : p.color;
+      const [r, g, bl, al] = p.textured || p.external ? [1, 1, 1, 1] : p.color;
       device.queue.writeBuffer(p.ubuf, 0, new Float32Array([w, h, p.extent[0], p.extent[1], r, g, bl, al * p.opacity, a, b, c, d, e, f, 0, 0]));
-      pass.setBindGroup(0, p.bind);
+      pass.setBindGroup(
+        0,
+        p.external
+          ? device.createBindGroup({
+              layout: this.externalPipeline.getBindGroupLayout(0),
+              entries: [
+                { binding: 0, resource: { buffer: p.ubuf } },
+                { binding: 1, resource: this.sampler },
+                { binding: 2, resource: device.importExternalTexture({ source: p.frame! }) },
+              ],
+            })
+          : p.bind!,
+      );
       pass.setVertexBuffer(0, p.vbuf);
       pass.setIndexBuffer(p.ibuf, "uint32");
       pass.drawIndexed(p.count);

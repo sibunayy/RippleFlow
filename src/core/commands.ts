@@ -116,6 +116,25 @@ export function removeKeyframe(layerId: Id, prop: TransformProp, keyId: Id): Com
   };
 }
 
+/** Change the composition length. Layers keep their own in/out points. */
+export function setDuration(seconds: number): Command {
+  return {
+    label: "Set length",
+    apply(comp) {
+      if (!(seconds >= 0.1 && Number.isFinite(seconds))) throw new Error("Length must be at least 0.1 s");
+      return seconds === comp.duration ? comp : { ...comp, duration: seconds };
+    },
+  };
+}
+
+/** Several edits as one undo step. They apply in order; if one throws, none take effect. */
+export function sequence(label: string, commands: readonly Command[]): Command {
+  return {
+    label,
+    apply: (comp) => commands.reduce((c, cmd) => cmd.apply(c), comp),
+  };
+}
+
 /** Set a layer's visible range in seconds. */
 export function setInOut(id: Id, inPoint: number, outPoint: number): Command {
   return {

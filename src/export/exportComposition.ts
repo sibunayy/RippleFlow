@@ -1,6 +1,7 @@
 import { scale } from "../core/affine";
 import { evaluateScene } from "../core/scene";
-import type { Composition, Id } from "../core/types";
+import type { Composition, Id, VideoContent } from "../core/types";
+import type { FrameRef } from "../video/videoLibrary";
 import { buildLayerGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
 import { MeshRenderer } from "../render/meshRenderer";
 import { backgroundDraw, DEFAULT_BACKGROUND, drawsFor, SceneSync } from "../app/sceneDraws";
@@ -34,6 +35,8 @@ export interface ExportOptions {
   readonly signal?: AbortSignal;
   /** Resolves a loaded picture by asset id (image layers). */
   readonly bitmapOf?: (asset: string) => ImageBitmap | undefined;
+  /** Source of video frames (one export session). Required when the composition has video layers. */
+  readonly videos?: { frame(video: VideoContent, t: number): Promise<FrameRef | undefined> };
   readonly onProgress?: (done: number, total: number) => void;
 }
 
@@ -55,6 +58,7 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
 
     const geometry = new Map<Id, ShapeGeometry | undefined>();
     for (const l of comp.layers) geometry.set(l.id, buildLayerGeometry(l, opts.bitmapOf ?? (() => undefined)));
+    const videoOf = new Map(comp.layers.filter((l) => l.video).map((l) => [l.id, l.video!]));
     const toDevice = scale(width / comp.width, height / comp.height);
     const sync = new SceneSync();
     const bgra = renderer.format === "bgra8unorm";
@@ -71,7 +75,16 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
       },
       async (index, timestamp, duration) => {
         const t = index / opts.preset.fps;
-        const draws = [backgroundDraw(comp, toDevice), ...drawsFor(evaluateScene(comp, t), (id) => geometry.get(id), toDevice)];
+        const items = evaluateScene(comp, t);
+        // Decode this instant's frame of every visible video layer before drawing.
+        const media = new Map<Id, FrameRef>();
+        for (const item of items) {
+          const v = videoOf.get(item.id);
+          if (!v) continue;
+          const ref = await opts.videos?.frame(v, t);
+          if (ref) media.set(item.id, ref);
+        }
+        const draws = [backgroundDraw(comp, toDevice), ...drawsFor(items, (id) => geometry.get(id), toDevice, (id) => media.get(id))];
         sync.sync(renderer, draws);
         const data = await readback.read();
         return new VideoFrame(data, {

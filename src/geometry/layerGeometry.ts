@@ -1,4 +1,5 @@
-import type { ImageContent, Layer, ShapeContent } from "../core/types";
+import { IDENTITY, type Affine } from "../core/affine";
+import type { ImageContent, Layer, ShapeContent, VideoContent } from "../core/types";
 import type { Bounds } from "../editor/hitTest";
 import { tessellateFill } from "./fill";
 import { flatten } from "./path";
@@ -12,6 +13,10 @@ export interface ShapePart {
   readonly color: readonly [number, number, number, number];
   /** Draw this picture across the mesh instead of the flat color. */
   readonly image?: ImageBitmap;
+  /** This part shows a video frame (supplied per frame by the media provider, not stored here). */
+  readonly video?: true;
+  /** Mesh to layer-local transform (used to rotate sideways-coded video). Defaults to identity. */
+  readonly local?: Affine;
 }
 
 export interface ShapeGeometry {
@@ -72,9 +77,37 @@ export function buildImageGeometry(image: ImageContent, bitmap: ImageBitmap | un
   };
 }
 
+/** Where the coded rectangle lands after the file's clockwise rotation, so it fills the display rectangle. */
+export function rotationMatrix(rotation: VideoContent["rotation"], codedW: number, codedH: number): Affine {
+  switch (rotation) {
+    case 90:
+      return [0, 1, -1, 0, codedH, 0];
+    case 180:
+      return [-1, 0, 0, -1, codedW, codedH];
+    case 270:
+      return [0, -1, 1, 0, 0, codedW];
+    default:
+      return IDENTITY;
+  }
+}
+
+/** Size of the clip as shown (after rotation). */
+export const displaySize = (v: Pick<VideoContent, "codedWidth" | "codedHeight" | "rotation">): { width: number; height: number } =>
+  v.rotation === 90 || v.rotation === 270 ? { width: v.codedHeight, height: v.codedWidth } : { width: v.codedWidth, height: v.codedHeight };
+
+/** A video layer is the coded rectangle (rotated into place); the frames themselves arrive per frame from the media provider. */
+export function buildVideoGeometry(video: VideoContent): ShapeGeometry {
+  const { width, height } = displaySize(video);
+  return {
+    parts: [{ mesh: rectMesh(video.codedWidth, video.codedHeight), color: [0, 0, 0, 1], video: true, local: rotationMatrix(video.rotation, video.codedWidth, video.codedHeight) }],
+    bounds: { x: 0, y: 0, w: width, h: height },
+  };
+}
+
 /** Geometry for any layer kind. `bitmapOf` resolves an image asset id once it has loaded. */
 export function buildLayerGeometry(layer: Layer, bitmapOf: (asset: string) => ImageBitmap | undefined): ShapeGeometry | undefined {
   if (layer.shape) return buildShapeGeometry(layer.shape);
   if (layer.image) return buildImageGeometry(layer.image, bitmapOf(layer.image.asset));
+  if (layer.video) return buildVideoGeometry(layer.video);
   return undefined;
 }

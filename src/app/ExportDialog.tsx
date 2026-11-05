@@ -1,6 +1,7 @@
 import { createSignal, For, Match, Show, Switch } from "solid-js";
 import type { Composition } from "../core/types";
 import { exportComposition, exportSize, PRESETS, type ExportPreset } from "../export/exportComposition";
+import type { ExportSession } from "../video/videoLibrary";
 
 type Phase =
   | { kind: "idle" }
@@ -14,7 +15,7 @@ const mb = (bytes: number) => (bytes < 1_000_000 ? `${Math.max(1, Math.round(byt
  * Export flow: pick a preset, render, then a Save button. The share sheet needs a
  * fresh tap (Safari rejects share() long after the gesture), so saving is its own step.
  */
-export function ExportDialog(props: { comp: () => Composition; bitmapOf: (asset: string) => ImageBitmap | undefined; onClose: () => void }) {
+export function ExportDialog(props: { comp: () => Composition; bitmapOf: (asset: string) => ImageBitmap | undefined; videoSession: () => ExportSession; onClose: () => void }) {
   const [preset, setPreset] = createSignal<ExportPreset>(PRESETS[1]!);
   const [phase, setPhase] = createSignal<Phase>({ kind: "idle" });
   const [saveNote, setSaveNote] = createSignal<string | null>(null);
@@ -36,11 +37,13 @@ export function ExportDialog(props: { comp: () => Composition; bitmapOf: (asset:
     abort = new AbortController();
     setSaveNote(null);
     setPhase({ kind: "running", done: 0, total: Math.round(preset().fps * comp.duration) });
+    const session = props.videoSession();
     try {
       const r = await exportComposition(comp, {
         preset: preset(),
         signal: abort.signal,
         bitmapOf: props.bitmapOf,
+        videos: session,
         onProgress: (done, total) => setPhase({ kind: "running", done, total }),
       });
       const file = new File([r.blob], "rippleflow.mp4", { type: "video/mp4" });
@@ -48,6 +51,8 @@ export function ExportDialog(props: { comp: () => Composition; bitmapOf: (asset:
     } catch (e) {
       if (abort.signal.aborted) setPhase({ kind: "idle" });
       else setPhase({ kind: "failed", message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      await session.close();
     }
   };
 

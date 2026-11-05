@@ -6,9 +6,10 @@ import { buildDraws, SceneSync, selectionCorners } from "./sceneDraws";
 import { Autosaver, loadProject, type SaveState } from "../persist/autosave";
 import { MemoryStore, OpfsStore, opfsAvailable, type ProjectStore } from "../persist/store";
 import { ImageLibrary } from "./images";
+import { VideoLibrary, type VideoMode } from "../video/videoLibrary";
 import { MemoryAssets, OpfsAssets } from "../persist/assets";
-import { addLayer } from "../core/commands";
-import { addShape, newImageLayer, nextLayerNumber, type ShapeKind } from "./shapes";
+import { addLayer, sequence, setDuration } from "../core/commands";
+import { addShape, newImageLayer, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Graph } from "./Graph";
@@ -18,7 +19,7 @@ import { Timeline } from "./Timeline";
 
 declare global {
   interface Window {
-    __rf?: { ctrl: EditorController; renderer: MeshRenderer; frame: () => void; saver: Autosaver; images: ImageLibrary };
+    __rf?: { ctrl: EditorController; renderer: MeshRenderer; frame: () => void; saver: Autosaver; images: ImageLibrary; videos: VideoLibrary };
   }
 }
 
@@ -41,6 +42,36 @@ export function Editor() {
     if (bad > 0) setNotice(`${bad} picture${bad === 1 ? "" : "s"} could not be loaded and show as grey boxes.`);
   });
   ctrl.bitmapOf = (asset) => images.bitmapOf(asset);
+  // "external" is the fast path measured on the iPad. "bitmap" exists for environments without external textures (the test container).
+  const videoMode: VideoMode = new URLSearchParams(location.search).get("videoMode") === "bitmap" ? "bitmap" : "external";
+  const videos = new VideoLibrary(
+    opfsAvailable() ? new OpfsAssets() : new MemoryAssets(),
+    () => {
+      ctrl.notifyImagesChanged();
+      const bad = videos.failed().length;
+      if (bad > 0) setNotice(`${bad} video${bad === 1 ? "" : "s"} could not be opened. Export would skip them.`);
+    },
+    videoMode,
+  );
+  ctrl.frameOf = (video, t) => videos.frameOf(video, t);
+  let videoInput!: HTMLInputElement;
+  const importVideos = async (files: FileList | null) => {
+    for (const file of Array.from(files ?? [])) {
+      try {
+        const start = Math.round(ctrl.time * ctrl.document.fps) / ctrl.document.fps;
+        const content = await videos.import(file, start);
+        const n = nextLayerNumber(ctrl.document.layers);
+        const layer = newVideoLayer(n, file.name.replace(/\.[^.]+$/, "") || `Video ${n}`, content, ctrl.document.width, ctrl.document.height, Math.max(ctrl.document.duration, start + content.duration));
+        // A clip longer than the composition extends it, so nothing is silently cut off.
+        const needed = Math.ceil((start + content.duration) * 10) / 10;
+        ctrl.execute(sequence(`Add video ${layer.name}`, [...(needed > ctrl.document.duration ? [setDuration(needed)] : []), addLayer(layer)]));
+        ctrl.setSelection(layer.id);
+      } catch (e) {
+        setNotice(`Could not import ${file.name}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    videoInput.value = "";
+  };
   let fileInput!: HTMLInputElement;
   const importFiles = async (files: FileList | null) => {
     for (const file of Array.from(files ?? [])) {
@@ -117,7 +148,7 @@ export function Editor() {
       renderer = await MeshRenderer.create(canvas);
       renderer.clearColor = { r: 0.13, g: 0.13, b: 0.15, a: 1 };
       resize();
-      if (new URLSearchParams(location.search).has("debug")) window.__rf = { ctrl, renderer, frame: () => frame(performance.now()), saver, images };
+      if (new URLSearchParams(location.search).has("debug")) window.__rf = { ctrl, renderer, frame: () => frame(performance.now()), saver, images, videos };
       if (!noloop) raf = requestAnimationFrame(frame);
       else frame(performance.now());
     } catch (e) {
@@ -190,6 +221,8 @@ export function Editor() {
         <button onClick={() => add("ellipse")}>Ellipse</button>
         <button onClick={() => add("star")}>Star</button>
         <button onClick={() => fileInput.click()}>Image</button>
+        <button onClick={() => videoInput.click()}>Video</button>
+        <input ref={videoInput} type="file" accept="video/*,.mov,.mp4,.m4v" hidden onChange={(e) => void importVideos(e.currentTarget.files)} />
         <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => void importFiles(e.currentTarget.files)} />
         <button onClick={del} disabled={(tick(), ctrl.selection === null)}>Delete</button>
         <span class="sep" />
@@ -248,7 +281,7 @@ export function Editor() {
         </Show>
       </div>
       <Show when={exporting()}>
-        <ExportDialog comp={() => ctrl.document} bitmapOf={(a) => images.bitmapOf(a)} onClose={() => setExporting(false)} />
+        <ExportDialog comp={() => ctrl.document} bitmapOf={(a) => images.bitmapOf(a)} videoSession={() => videos.exportSession()} onClose={() => setExporting(false)} />
       </Show>
       <Props ctrl={ctrl} tick={tick} />
       <Timeline ctrl={ctrl} tick={tick} picked={picked} setPicked={setPicked} />

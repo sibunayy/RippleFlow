@@ -58,6 +58,32 @@ export class OpfsAssets implements AssetStore {
   }
 }
 
+const SAMPLE_BYTES = 1 << 20;
+
+/**
+ * Cheap fingerprint for large files (videos): SHA-256 over the size plus three
+ * 1 MB slices (start, middle, end). Two different files agreeing on all of
+ * those is not a realistic accident, and it avoids reading a 500 MB clip into memory.
+ */
+export async function hashBlobSampled(blob: Blob): Promise<string> {
+  if (blob.size <= 3 * SAMPLE_BYTES) return hashBlob(blob);
+  const mid = Math.floor(blob.size / 2) - SAMPLE_BYTES / 2;
+  const parts = [
+    new TextEncoder().encode(String(blob.size)),
+    new Uint8Array(await blob.slice(0, SAMPLE_BYTES).arrayBuffer()),
+    new Uint8Array(await blob.slice(mid, mid + SAMPLE_BYTES).arrayBuffer()),
+    new Uint8Array(await blob.slice(blob.size - SAMPLE_BYTES).arrayBuffer()),
+  ];
+  const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let o = 0;
+  for (const p of parts) {
+    all.set(p, o);
+    o += p.length;
+  }
+  const digest = await crypto.subtle.digest("SHA-256", all);
+  return [...new Uint8Array(digest).slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** First 128 bits of SHA-256, as 32 lowercase hex characters. */
 export async function hashBlob(blob: Blob): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());

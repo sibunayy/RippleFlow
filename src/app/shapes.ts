@@ -1,6 +1,7 @@
 import { addLayer } from "../core/commands";
 import type { Command } from "../core/history";
-import type { ImageContent, Layer, Rgba, Track } from "../core/types";
+import { displaySize } from "../geometry/layerGeometry";
+import type { ImageContent, Layer, Rgba, Track, VideoContent } from "../core/types";
 
 const empty: Track = { keys: [] };
 const still = (v: number): Track => ({ keys: [{ id: `s${v}`, t: 0, value: v }] });
@@ -54,6 +55,33 @@ export function newImageLayer(n: number, name: string, image: ImageContent, comp
     transform: {
       anchorX: still(image.width / 2),
       anchorY: still(image.height / 2),
+      x: still(compW / 2),
+      y: still(compH / 2),
+      scaleX: still(fit),
+      scaleY: still(fit),
+      rotation: empty,
+      opacity: empty,
+    },
+  };
+}
+
+/**
+ * A video layer centred on the composition, fitted inside it, visible from where the
+ * clip starts until it ends (or the composition does).
+ */
+export function newVideoLayer(n: number, name: string, video: VideoContent, compW: number, compH: number, compDuration: number): Layer {
+  const { width, height } = displaySize(video);
+  const fit = Math.min(compW / width, compH / height);
+  return {
+    id: `layer-${n}`,
+    name,
+    kind: "video",
+    video,
+    inPoint: video.start,
+    outPoint: Math.min(compDuration, video.start + video.duration),
+    transform: {
+      anchorX: still(width / 2),
+      anchorY: still(height / 2),
       x: still(compW / 2),
       y: still(compH / 2),
       scaleX: still(fit),

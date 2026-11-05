@@ -87,3 +87,17 @@ describe("image layers", () => {
     }
   });
 });
+
+describe("video layers", () => {
+  const vid = { asset: "0123456789abcdef0123456789abcdef", codedWidth: 1920, codedHeight: 1080, rotation: 90, duration: 4.29, start: 1.5 };
+  const vLayer = (over: Record<string, unknown> = {}) => ({ id: "v", name: "clip", kind: "video", video: vid, transform: layer("x").transform, ...over }) as unknown as Layer;
+  it("round trips", () => {
+    const c = comp(vLayer());
+    expect(deserialize(serialize(c))).toEqual(c);
+  });
+  it("rejects missing content, bad rotation, bad sizes and bad asset ids", () => {
+    for (const bad of [{ video: undefined }, { video: { ...vid, rotation: 45 } }, { video: { ...vid, codedWidth: 0 } }, { video: { ...vid, duration: -1 } }, { video: { ...vid, asset: "x/../y" } }, { video: { ...vid, start: "0" } }]) {
+      expect(() => deserialize(serialize(comp(vLayer(bad))))).toThrow(FormatError);
+    }
+  });
+});

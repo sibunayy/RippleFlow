@@ -60,9 +60,10 @@ Phase 0 is done (see `docs/phase0-results.md`). Built and merged, container-veri
 - M3 easing editor: bezier handles and presets per keyframe segment.
 - M5 persistence and PWA: validated versioned format, OPFS autosave, offline service worker with update prompt.
 - M6 export: offscreen render to H.264 MP4 with share/download.
+- M4 media: image layers (OPFS assets by content hash, downscale to 2048) and video layers (Mediabunny sequential/seek decode, external-texture draw, rotation metadata, in export too). Video layers plays from `video.start`; in/out points only gate visibility.
 
-Not built: M4 media (images, video layers, SVG import), project list/naming, file open/save, text, audio.
+Not built: SVG import, project list/naming, file open/save, text, audio (video clips export silent), composition size/fps UI, slipping/moving a clip on the timeline.
 
-Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.
+Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.
 
 Container gotchas: the software GPU cannot read back a buffer while a canvas is being presented, so test pages use `?debug&noloop` and the `window.__rf` hook (no canvas present, manual frames).
