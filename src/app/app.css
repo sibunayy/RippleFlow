@@ -133,3 +133,5 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .fx-btns .mini { min-width: 36px; min-height: 36px; font-size: 14px; padding: 0 6px; }
 .fx-params { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .fx-params .scrub-label { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-sel { display: flex; flex-direction: column; gap: 2px; }
+.field-sel select { min-height: 40px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 15px; padding: 0 8px; }

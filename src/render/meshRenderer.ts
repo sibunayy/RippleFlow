@@ -1,6 +1,6 @@
 import { IDENTITY, type Affine } from "../core/affine";
 import type { Mesh } from "../geometry/mesh";
-import type { BlendMode, Gradient } from "../core/types";
+import type { BlendMode, Gradient, MaskMode, MatteMode } from "../core/types";
 import { Nv12Readback } from "./nv12Readback";
 import { FxEngine } from "./fxEngine";
 import type { ResolvedFx } from "../core/effects";
@@ -30,8 +30,10 @@ export interface Draw {
   gradient?: GradientPaint;
   /** How it combines with what is behind it. Defaults to "normal". */
   blend?: BlendMode;
-  /** Set on every draw of a layer that has effects. */
+  /** Set on every draw of a layer that has effects, masks or a matte. */
   group?: GroupInfo;
+  /** What a draw inside a group is for. Unset: the layer's own picture. */
+  role?: "matte" | { readonly mask: number };
 }
 
 /**
@@ -45,6 +47,10 @@ export interface GroupInfo {
   readonly fx: readonly ResolvedFx[];
   readonly opacity: number;
   readonly blend: BlendMode;
+  /** Applied in order before the effects. Each mask's own draws carry `role: { mask: index }`. */
+  readonly masks?: readonly { readonly mode: MaskMode; readonly feather: number; readonly opacity: number; readonly inverted: boolean }[];
+  /** Applied after the effects. The matte layer's draws carry `role: "matte"`. */
+  readonly matte?: { readonly mode: MatteMode };
 }
 
 export interface GradientPaint {
@@ -178,6 +184,7 @@ interface Prepared {
   textured: boolean;
   blend: BlendMode;
   group?: GroupInfo;
+  role?: Draw["role"];
   gradient?: GradientPaint;
   /** Current video frame; the draw is skipped until one is set. */
   external: boolean;
@@ -333,6 +340,7 @@ export class MeshRenderer {
           textured,
           blend: d.blend ?? "normal",
           group: d.group,
+          role: d.role,
           gradient,
           external,
           frame: d.frame,
@@ -437,7 +445,7 @@ export class MeshRenderer {
     }
     if (!runs.some((r) => r.group)) {
       const pass = this.msaaPass(enc, target, this.clearColor, w, h);
-      this.drawList(pass, this.prepared, w, h, false);
+      this.drawList(pass, this.prepared, w, h, 0);
       pass.end();
       return;
     }
@@ -450,16 +458,46 @@ export class MeshRenderer {
         const out: GPUTexture = last ? target : fx.nextAccum(cur);
         const pass = this.msaaPass(enc, out, cur ? { r: 0, g: 0, b: 0, a: 0 } : this.clearColor, w, h);
         if (cur) fx.copyInto(pass, cur);
-        this.drawList(pass, run.list, w, h, false);
+        this.drawList(pass, run.list, w, h, 0);
         pass.end();
         cur = out;
         return;
       }
+      const g = run.group;
+      const own = run.list.filter((p) => p.role === undefined);
       const layer = fx.layerTarget;
       const pass = this.msaaPass(enc, layer, { r: 0, g: 0, b: 0, a: 0 }, w, h);
-      this.drawList(pass, run.list, w, h, true);
+      this.drawList(pass, own, w, h, 1);
       pass.end();
-      const result = fx.applyEffects(enc, layer, run.group.fx);
+      let tex: GPUTexture = layer;
+      if (g.masks?.length) {
+        let cover = fx.named("coverA");
+        let spare = fx.named("coverB");
+        fx.fill(enc, cover, g.masks[0]!.mode === "add" ? 0 : 1);
+        g.masks.forEach((mk, mi) => {
+          const shape = fx.named("maskShape");
+          const mp = this.msaaPass(enc, shape, { r: 0, g: 0, b: 0, a: 0 }, w, h);
+          this.drawList(mp, run.list.filter((p) => typeof p.role === "object" && p.role.mask === mi), w, h, 1);
+          mp.end();
+          const soft = fx.blurred(enc, shape, mk.feather);
+          fx.maskOp(enc, spare, cover, soft, mk.mode, mk.opacity, mk.inverted);
+          [cover, spare] = [spare, cover];
+        });
+        const masked = fx.named("masked");
+        fx.mulAlpha(enc, masked, tex, cover);
+        tex = masked;
+      }
+      tex = fx.applyEffects(enc, tex, g.fx);
+      if (g.matte) {
+        const mt = fx.named("matteShape");
+        const mp = this.msaaPass(enc, mt, { r: 0, g: 0, b: 0, a: 0 }, w, h);
+        this.drawList(mp, run.list.filter((p) => p.role === "matte"), w, h, 2);
+        mp.end();
+        const matted = fx.named("matted");
+        fx.applyMatte(enc, matted, tex, mt, g.matte.mode);
+        tex = matted;
+      }
+      const result = tex;
       const out: GPUTexture = last ? target : fx.nextAccum(cur);
       fx.composite(enc, out, cur, result, run.group.opacity, run.group.blend, this.clearColor);
       cur = out;
@@ -480,8 +518,9 @@ export class MeshRenderer {
     });
   }
 
-  /** `flat`: draw at full opacity with normal blending (the layer's group applies those later). */
-  private drawList(pass: GPURenderPassEncoder, list: readonly Prepared[], w: number, h: number, flat: boolean): void {
+  /** `mode` 1: full opacity, normal blend (the layer's group applies those later). 2: keep each draw's opacity, normal blend. */
+  private drawList(pass: GPURenderPassEncoder, list: readonly Prepared[], w: number, h: number, mode: 0 | 1 | 2): void {
+    const flat = mode !== 0;
     const { device } = this.gpu;
     let current: GPURenderPipeline | null = null;
     const data = new Float32Array(UNIFORM_FLOATS);
@@ -496,7 +535,7 @@ export class MeshRenderer {
       const [a, b, c, d, e, f] = p.transform;
       const [r, g, bl, al] = p.textured || p.external || p.gradient ? [1, 1, 1, 1] : p.color;
       data.fill(0);
-      data.set([w, h, p.extent[0], p.extent[1], r, g, bl, al * (flat ? 1 : p.opacity), a, b, c, d, e, f, 0, 0]);
+      data.set([w, h, p.extent[0], p.extent[1], r, g, bl, al * (mode === 1 ? 1 : p.opacity), a, b, c, d, e, f, 0, 0]);
       if (p.gradient) {
         const { gradient: gr, bbox } = p.gradient;
         data.set([bbox.x, bbox.y, bbox.w, bbox.h, gr.kind === "radial" ? 1 : 0, (gr.angle * Math.PI) / 180, gr.stops.length, 0], 16);

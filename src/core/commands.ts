@@ -1,5 +1,5 @@
 import type { Command } from "./history";
-import type { BlendMode, Composition, Effect, Id, Keyframe, Layer, ShapeContent, Track, Transform } from "./types";
+import type { BlendMode, Composition, Effect, Id, Keyframe, Layer, Mask, Matte, ShapeContent, Track, Transform } from "./types";
 
 const find = (comp: Composition, id: Id): Layer => {
   const layer = comp.layers.find((l) => l.id === id);
@@ -238,6 +238,73 @@ export function patchEffect(layerId: Id, effectId: Id, label: string, edit: (e: 
       if (i < 0) throw new Error(`No effect ${effectId}`);
       const next = edit(list[i]!);
       return next === list[i] ? comp : replaceLayer(comp, { ...layer, effects: list.map((e, k) => (k === i ? next : e)) });
+    },
+  };
+}
+
+export function setHidden(id: Id, hidden: boolean): Command {
+  return {
+    label: hidden ? "Hide layer" : "Show layer",
+    apply(comp) {
+      const layer = find(comp, id);
+      if ((layer.hidden ?? false) === hidden) return comp;
+      const { hidden: _h, ...rest } = layer;
+      return replaceLayer(comp, hidden ? { ...rest, hidden: true } : rest);
+    },
+  };
+}
+
+/** Use another layer as this layer's track matte (or clear it with undefined). */
+export function setMatte(id: Id, matte: Matte | undefined): Command {
+  return {
+    label: matte ? "Set track matte" : "Remove track matte",
+    apply(comp) {
+      const layer = find(comp, id);
+      if (matte) {
+        if (matte.source === id) throw new Error("A layer cannot be its own matte");
+        find(comp, matte.source);
+      }
+      const { matte: _m, ...rest } = layer;
+      if (!matte && !layer.matte) return comp;
+      return replaceLayer(comp, matte ? { ...rest, matte } : rest);
+    },
+  };
+}
+
+export function addMask(layerId: Id, mask: Mask): Command {
+  return {
+    label: "Add mask",
+    apply(comp) {
+      const layer = find(comp, layerId);
+      if ((layer.masks ?? []).some((m) => m.id === mask.id)) throw new Error(`Mask ${mask.id} already exists`);
+      return replaceLayer(comp, { ...layer, masks: [...(layer.masks ?? []), mask] });
+    },
+  };
+}
+
+export function removeMask(layerId: Id, maskId: Id): Command {
+  return {
+    label: "Remove mask",
+    apply(comp) {
+      const layer = find(comp, layerId);
+      const masks = (layer.masks ?? []).filter((m) => m.id !== maskId);
+      if (masks.length === (layer.masks ?? []).length) throw new Error(`No mask ${maskId}`);
+      const { masks: _d, ...rest } = layer;
+      return replaceLayer(comp, masks.length ? { ...rest, masks } : rest);
+    },
+  };
+}
+
+export function patchMask(layerId: Id, maskId: Id, label: string, edit: (m: Mask) => Mask): Command {
+  return {
+    label,
+    apply(comp) {
+      const layer = find(comp, layerId);
+      const list = layer.masks ?? [];
+      const i = list.findIndex((m) => m.id === maskId);
+      if (i < 0) throw new Error(`No mask ${maskId}`);
+      const next = edit(list[i]!);
+      return next === list[i] ? comp : replaceLayer(comp, { ...layer, masks: list.map((m, k) => (k === i ? next : m)) });
     },
   };
 }

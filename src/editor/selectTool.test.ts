@@ -3,7 +3,7 @@ import { apply, IDENTITY, translate } from "../core/affine";
 import type { SceneItem } from "../core/scene";
 import { SelectTool, type ToolContext, type ToolEvent } from "./selectTool";
 
-const item = (id: string, matrix = IDENTITY): SceneItem => ({ id, kind: "shape", matrix, opacity: 1, blend: "normal", effects: [] });
+const item = (id: string, matrix = IDENTITY): SceneItem => ({ id, kind: "shape", matrix, opacity: 1, blend: "normal", effects: [], masks: [] });
 const ctx = (items: SceneItem[]): ToolContext => ({
   items,
   boundsOf: () => ({ x: 0, y: 0, w: 100, h: 100 }),

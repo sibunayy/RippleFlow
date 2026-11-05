@@ -18,6 +18,7 @@ import {
   setStrokeEnabled,
   type FillMode,
 } from "../editor/styleEdit";
+import { Compositing } from "./Compositing";
 import { Effects } from "./Effects";
 import { ScrubField } from "./ScrubField";
 
@@ -220,6 +221,7 @@ export function Style(props: { ctrl: EditorController; tick: () => number; notif
                   </>
                 )}
               </Show>
+              <Compositing ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
               <Effects ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
             </div>
           </aside>

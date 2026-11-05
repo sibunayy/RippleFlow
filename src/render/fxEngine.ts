@@ -35,6 +35,29 @@ fn here(i: VOut) -> vec4f { return textureLoad(src, vec2i(i.pos.xy), 0); }
 `;
 
 const BODIES: Record<string, string> = {
+  // p0 = (mode 0 add / 1 subtract / 2 intersect, opacity, inverted). src = coverage so far, aux = this mask. Writes alpha to every channel.
+  maskop: `
+@fragment fn fs(i: VOut) -> @location(0) vec4f {
+  let m = textureLoad(src, vec2i(i.pos.xy), 0).a;
+  var c = textureLoad(aux, vec2i(i.pos.xy), 0).a;
+  if (u.p0.z > 0.5) { c = 1.0 - c; }
+  c = c * u.p0.y;
+  var a = m + c * (1.0 - m);
+  if (u.p0.x > 0.5 && u.p0.x < 1.5) { a = m * (1.0 - c); }
+  if (u.p0.x > 1.5) { a = m * c; }
+  return vec4f(a);
+}`,
+  // layer (src) times a coverage texture (aux)
+  mulalpha: `@fragment fn fs(i: VOut) -> @location(0) vec4f { return here(i) * textureLoad(aux, vec2i(i.pos.xy), 0).a; }`,
+  // p0.x = 0 alpha, 1 alpha inverted, 2 luma, 3 luma inverted. aux = the matte layer drawn on its own.
+  matte: `
+@fragment fn fs(i: VOut) -> @location(0) vec4f {
+  let t = textureLoad(aux, vec2i(i.pos.xy), 0);
+  var m = t.a;
+  if (u.p0.x > 1.5) { m = lum(unpremul(t)) * t.a; }
+  if ((u.p0.x > 0.5 && u.p0.x < 1.5) || u.p0.x > 2.5) { m = 1.0 - m; }
+  return here(i) * m;
+}`,
   copy: `@fragment fn fs(i: VOut) -> @location(0) vec4f { return here(i); }`,
   composite: `@fragment fn fs(i: VOut) -> @location(0) vec4f { return here(i) * u.p0.x; }`,
   // p0 = (dir.xy, sigma, mode: 1 = keep only alpha), p1.xy = sampling offset in px
@@ -204,7 +227,8 @@ export class FxEngine {
     return this.device.createTexture({ size: this.size, format: this.format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
   }
   private releaseTextures(): void {
-    for (const t of [...this.pool, ...this.accum, ...(this.layerTex ? [this.layerTex] : [])]) t.destroy();
+    for (const t of [...this.pool, ...this.accum, ...this.textures.values(), ...(this.layerTex ? [this.layerTex] : [])]) t.destroy();
+    this.textures.clear();
     this.pool = [];
     this.accum = [];
     this.layerTex = null;
@@ -214,6 +238,41 @@ export class FxEngine {
   get layerTarget(): GPUTexture {
     return (this.layerTex ??= this.make());
   }
+  /** A scratch texture that lives until the size changes. Distinct names are distinct textures. */
+  named(name: string): GPUTexture {
+    let t = this.textures.get(name);
+    if (!t) {
+      t = this.make();
+      this.textures.set(name, t);
+    }
+    return t;
+  }
+
+  /** Clear `tex` to a constant (used to seed mask coverage with 0 or 1). */
+  fill(enc: GPUCommandEncoder, tex: GPUTexture, v: number): void {
+    enc.beginRenderPass({ colorAttachments: [{ view: tex.createView(), loadOp: "clear", clearValue: { r: v, g: v, b: v, a: v }, storeOp: "store" }] }).end();
+  }
+
+  maskOp(enc: GPUCommandEncoder, dst: GPUTexture, coverage: GPUTexture, mask: GPUTexture, mode: "add" | "subtract" | "intersect", opacity: number, inverted: boolean): void {
+    this.fullscreen(enc, dst, "maskop", coverage, mask, [mode === "add" ? 0 : mode === "subtract" ? 1 : 2, opacity, inverted ? 1 : 0, 0]);
+  }
+  mulAlpha(enc: GPUCommandEncoder, dst: GPUTexture, layer: GPUTexture, coverage: GPUTexture): void {
+    this.fullscreen(enc, dst, "mulalpha", layer, coverage);
+  }
+  applyMatte(enc: GPUCommandEncoder, dst: GPUTexture, layer: GPUTexture, matte: GPUTexture, mode: "alpha" | "alphaInverted" | "luma" | "lumaInverted"): void {
+    this.fullscreen(enc, dst, "matte", layer, matte, [{ alpha: 0, alphaInverted: 1, luma: 2, lumaInverted: 3 }[mode], 0, 0, 0]);
+  }
+
+  /** Gaussian blur of a whole texture (radius in px). The result is a pooled texture, valid until the next effect pass. */
+  blurred(enc: GPUCommandEncoder, src: GPUTexture, radius: number): GPUTexture {
+    if (radius < 0.05) return src;
+    const a = this.pick(src);
+    this.fullscreen(enc, a, "blur", src, src, [1, 0, radius / 2, 0]);
+    const b = this.pick(src, a);
+    this.fullscreen(enc, b, "blur", a, a, [0, 1, radius / 2, 0]);
+    return b;
+  }
+
   /** Alternates between two textures, so a result never overwrites the one it was built on. */
   nextAccum(not: GPUTexture | null): GPUTexture {
     while (this.accum.length < 2) this.accum.push(this.make());

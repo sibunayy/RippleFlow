@@ -1,6 +1,6 @@
 import type { Affine } from "./affine";
 import { opacityAt, worldMatrices } from "./layerTransform";
-import type { BlendMode, Composition, Id, Layer } from "./types";
+import type { BlendMode, Composition, Id, Layer, Mask, MatteMode } from "./types";
 import { resolveEffects, type ResolvedFx } from "./effects";
 
 /** One layer, resolved for a single instant: ready for a renderer. */
@@ -14,6 +14,9 @@ export interface SceneItem {
   readonly blend: BlendMode;
   /** Enabled effects with values at this instant. Empty for most layers. */
   readonly effects: readonly ResolvedFx[];
+  readonly masks: readonly Mask[];
+  /** The matte layer evaluated at this instant. `source` is null when it is not visible now (an empty matte). */
+  readonly matte?: { readonly mode: MatteMode; readonly source: SceneItem | null };
 }
 
 /**
@@ -28,12 +31,25 @@ export interface SceneItem {
  */
 export function evaluateScene(comp: Composition, t: number): SceneItem[] {
   const matrices = worldMatrices(comp.layers, t);
+  const visible = (layer: Layer) => t >= (layer.inPoint ?? 0) && t < (layer.outPoint ?? comp.duration);
+  const make = (layer: Layer, withMatte: boolean): SceneItem => {
+    const item: SceneItem = {
+      id: layer.id,
+      kind: layer.kind,
+      matrix: matrices.get(layer.id)!,
+      opacity: opacityAt(layer, t),
+      blend: layer.blend ?? "normal",
+      effects: withMatte ? resolveEffects(layer, t) : [],
+      masks: withMatte ? (layer.masks ?? []) : [],
+    };
+    if (!withMatte || !layer.matte) return item;
+    const src = comp.layers.find((l) => l.id === layer.matte!.source);
+    return { ...item, matte: { mode: layer.matte.mode, source: src && visible(src) ? make(src, false) : null } };
+  };
   const items: SceneItem[] = [];
   for (const layer of comp.layers) {
-    const start = layer.inPoint ?? 0;
-    const end = layer.outPoint ?? comp.duration;
-    if (t < start || t >= end) continue;
-    items.push({ id: layer.id, kind: layer.kind, matrix: matrices.get(layer.id)!, opacity: opacityAt(layer, t), blend: layer.blend ?? "normal", effects: resolveEffects(layer, t) });
+    if (layer.hidden || !visible(layer)) continue;
+    items.push(make(layer, true));
   }
   return items;
 }

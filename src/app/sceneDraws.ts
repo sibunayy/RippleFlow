@@ -1,5 +1,6 @@
 import { IDENTITY, multiply, scale, type Affine } from "../core/affine";
-import type { Composition, Rgba } from "../core/types";
+import type { Composition, Mask, Rgba } from "../core/types";
+import type { Mesh } from "../geometry/mesh";
 import type { SceneItem } from "../core/scene";
 import type { ShapeGeometry } from "../geometry/layerGeometry";
 import type { FrameRef } from "../video/videoLibrary";
@@ -16,46 +17,78 @@ export function backgroundDraw(comp: Composition, toDevice: Affine): PlacedDraw 
   return { mesh: rectMesh(comp.width, comp.height), color: comp.background ?? DEFAULT_BACKGROUND, transform: toDevice, opacity: 1 };
 }
 
-/** Layer draws for already-evaluated scene items, mapped to device pixels by `toDevice`. Empty meshes are dropped. */
+/** The draws for one layer's own picture (no group, effects or matte). */
+function layerDraws(item: SceneItem, g: ShapeGeometry, toDevice: Affine, mediaOf?: (id: string) => FrameRef | undefined): PlacedDraw[] {
+  const out: PlacedDraw[] = [];
+  const layerToDevice = multiply(toDevice, item.matrix);
+  const [ma, mb, mc, md] = item.matrix;
+  const sx = Math.hypot(ma, mb);
+  const sy = Math.hypot(mc, md);
+  for (const part of g.parts) {
+    let mesh = part.mesh;
+    let base = layerToDevice;
+    // Non-uniform layer scale would thin a stroke along one axis; rebuild it in scaled space instead.
+    if (part.strokeAt && sx > 1e-9 && sy > 1e-9 && Math.abs(sx - sy) > 1e-3 * Math.max(sx, sy)) {
+      mesh = part.strokeAt(sx, sy);
+      base = multiply(layerToDevice, [1 / sx, 0, 0, 1 / sy, 0, 0]);
+    }
+    if (mesh.indices.length === 0) continue;
+    const transform = part.local ? multiply(base, part.local) : base;
+    if (part.video) {
+      const m = mediaOf?.(item.id);
+      if (!m || (!m.frame && !m.image)) continue;
+      out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(m.frame ? { frame: m.frame } : { image: m.image! }) });
+    } else {
+      out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(part.image ? { image: part.image } : {}), ...(part.gradient ? { gradient: part.gradient } : {}) });
+    }
+  }
+  return out;
+}
+
+const WHITE: Rgba = [1, 1, 1, 1];
+
+/**
+ * Layer draws for already-evaluated scene items, mapped to device pixels by `toDevice`. Empty meshes are
+ * dropped. A layer with effects, masks or a track matte becomes a group: its own draws, then one set of
+ * draws per mask and the matte layer's draws, all tagged so the renderer can build and combine them.
+ */
 export function drawsFor(
   items: readonly SceneItem[],
   geometryOf: (id: string) => ShapeGeometry | undefined,
   toDevice: Affine,
   /** Current frame of a video layer, if one has been decoded. Video layers with no frame yet are skipped. */
   mediaOf?: (id: string) => FrameRef | undefined,
+  /** Triangles for a mask's path (layer-local coordinates). */
+  maskMeshOf?: (mask: Mask) => Mesh | undefined,
 ): PlacedDraw[] {
   const out: PlacedDraw[] = [];
   const unit = Math.hypot(toDevice[0], toDevice[1]);
   items.forEach((item, itemIndex) => {
     const g = geometryOf(item.id);
     if (!g) return;
-    const group: GroupInfo | undefined = item.effects.length
-      ? { id: itemIndex, fx: item.effects.map((f) => scaleSpatial(f, unit)), opacity: item.opacity, blend: item.blend }
-      : undefined;
-    const first = out.length;
-    const layerToDevice = multiply(toDevice, item.matrix);
-    const [ma, mb, mc, md] = item.matrix;
-    const sx = Math.hypot(ma, mb);
-    const sy = Math.hypot(mc, md);
-    for (const part of g.parts) {
-      let mesh = part.mesh;
-      let base = layerToDevice;
-      // Non-uniform layer scale would thin a stroke along one axis; rebuild it in scaled space instead.
-      if (part.strokeAt && sx > 1e-9 && sy > 1e-9 && Math.abs(sx - sy) > 1e-3 * Math.max(sx, sy)) {
-        mesh = part.strokeAt(sx, sy);
-        base = multiply(layerToDevice, [1 / sx, 0, 0, 1 / sy, 0, 0]);
-      }
-      if (mesh.indices.length === 0) continue;
-      const transform = part.local ? multiply(base, part.local) : base;
-      if (part.video) {
-        const m = mediaOf?.(item.id);
-        if (!m || (!m.frame && !m.image)) continue;
-        out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(m.frame ? { frame: m.frame } : { image: m.image! }) });
-      } else {
-        out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(part.image ? { image: part.image } : {}), ...(part.gradient ? { gradient: part.gradient } : {}) });
-      }
+    const own = layerDraws(item, g, toDevice, mediaOf);
+    const grouped = item.effects.length > 0 || item.masks.length > 0 || !!item.matte;
+    if (!grouped) {
+      out.push(...own);
+      return;
     }
-    if (group) for (let i = first; i < out.length; i++) out[i] = { ...out[i]!, group };
+    const group: GroupInfo = {
+      id: itemIndex,
+      fx: item.effects.map((f) => scaleSpatial(f, unit)),
+      opacity: item.opacity,
+      blend: item.blend,
+      ...(item.masks.length ? { masks: item.masks.map((m) => ({ mode: m.mode, feather: m.feather * unit, opacity: m.opacity, inverted: !!m.inverted })) } : {}),
+      ...(item.matte ? { matte: { mode: item.matte.mode } } : {}),
+    };
+    out.push(...own.map((d) => ({ ...d, group })));
+    const layerToDevice = multiply(toDevice, item.matrix);
+    item.masks.forEach((m, mi) => {
+      const mesh = maskMeshOf?.(m);
+      if (mesh && mesh.indices.length > 0) out.push({ mesh, color: WHITE, transform: layerToDevice, opacity: 1, group, role: { mask: mi } });
+    });
+    const src = item.matte?.source;
+    const sg = src ? geometryOf(src.id) : undefined;
+    if (src && sg) out.push(...layerDraws(src, sg, toDevice, mediaOf).map((d) => ({ ...d, group, role: "matte" as const })));
   });
   return out;
 }
@@ -67,10 +100,16 @@ export function buildDraws(ctrl: EditorController, devicePixelRatio: number): Pl
   const videos = new Map(comp.layers.filter((l) => l.video).map((l) => [l.id, l.video!]));
   return [
     backgroundDraw(comp, toDevice),
-    ...drawsFor(ctrl.scene(), (id) => ctrl.geometryOf(id), toDevice, (id) => {
-      const v = videos.get(id);
-      return v ? ctrl.frameOf(v, ctrl.time) : undefined;
-    }),
+    ...drawsFor(
+      ctrl.scene(),
+      (id) => ctrl.geometryOf(id),
+      toDevice,
+      (id) => {
+        const v = videos.get(id);
+        return v ? ctrl.frameOf(v, ctrl.time) : undefined;
+      },
+      (m) => ctrl.maskMesh(m),
+    ),
   ];
 }
 
@@ -91,7 +130,7 @@ export class SceneSync {
   sync(target: Target, draws: PlacedDraw[]): "scene" | "transforms" {
     const same =
       draws.length === this.last.length &&
-      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.image === this.last[i]!.image && d.gradient === this.last[i]!.gradient && d.group?.id === this.last[i]!.group?.id && d.blend === this.last[i]!.blend && !d.frame === !this.last[i]!.frame && d.color.every((c, k) => c === this.last[i]!.color[k]));
+      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.image === this.last[i]!.image && d.gradient === this.last[i]!.gradient && d.group?.id === this.last[i]!.group?.id && JSON.stringify(d.role) === JSON.stringify(this.last[i]!.role) && d.blend === this.last[i]!.blend && !d.frame === !this.last[i]!.frame && d.color.every((c, k) => c === this.last[i]!.color[k]));
     if (!same) {
       target.setScene(draws);
       this.last = draws;
