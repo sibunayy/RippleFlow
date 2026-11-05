@@ -7,6 +7,7 @@ const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enab
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
 const errors = []; page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300);
+await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
 await page.getByRole("button", { name: "Rect", exact: true }).click();
 const pos = () => page.evaluate(() => { const l = window.__rf.ctrl.document.layers.at(-1); return [l.transform.x.keys.at(-1).value, l.transform.y.keys.at(-1).value]; });
 await page.getByRole("button", { name: "Align left" }).click();

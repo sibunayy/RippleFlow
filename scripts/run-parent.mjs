@@ -8,6 +8,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(process.argv[2]);
 await page.waitForFunction(() => window.__rf);
+await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
 await page.waitForTimeout(600);
 const check = (n, ok) => console.log(ok ? "PASS" : "FAIL", n);
 const items = () => page.evaluate(() => window.__rf.ctrl.document.layers.map((l) => ({ id: l.id, parent: l.parent })));
