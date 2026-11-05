@@ -6,6 +6,9 @@ import type { FrameRef } from "../video/videoLibrary";
 import { buildImageGeometry, buildShapeGeometry, buildVideoGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
 import { TwoFingerGesture } from "../input/twoFingerGesture";
 import { applyWorldDelta, transformLayer } from "./transformEdit";
+import { editShape } from "../core/commands";
+import { deleteNode, isSmooth, nodesToPath, parseNodes, setCorner, setSmooth, type NodePath } from "../geometry/nodes";
+import { NodeTool, type NodeContext, type NodeOutput, type NodeSel } from "./nodeTool";
 import { SelectTool, type ToolContext, type ToolOutput } from "./selectTool";
 import type { Bounds } from "./hitTest";
 
@@ -31,6 +34,9 @@ export class EditorController {
   private readonly geometry = new WeakMap<object, ShapeGeometry>();
   private listeners = new Set<() => void>();
   private preview: Composition | null = null;
+  private readonly nodeTool = new NodeTool();
+  private pointEditOn = false;
+  private parsed: { d: string; paths: NodePath[] } | null = null;
 
   /** Playhead, seconds. */
   time = 0;
@@ -48,6 +54,8 @@ export class EditorController {
     this.history = new History(doc);
     this.tool.cancel();
     this.tool.setSelection(null);
+    this.nodeTool.cancel();
+    this.nodeTool.setSelection(null);
     this.preview = null;
     this.time = 0;
     this.emit();
@@ -85,11 +93,13 @@ export class EditorController {
     this.emit();
   }
   undo(): void {
+    this.nodeTool.setSelection(null);
     this.history.undo();
     this.fixSelection();
     this.emit();
   }
   redo(): void {
+    this.nodeTool.setSelection(null);
     this.history.redo();
     this.fixSelection();
     this.emit();
@@ -99,8 +109,114 @@ export class EditorController {
     this.emit();
   }
   setSelection(id: Id | null): void {
+    if (id !== this.tool.selection) this.nodeTool.setSelection(null);
     this.tool.setSelection(id);
     this.emit();
+  }
+
+  // ---- Point editing -------------------------------------------------------
+
+  /** True while the pen edits the selected shape's points instead of moving the layer. */
+  get pointEdit(): boolean {
+    return this.pointEditOn;
+  }
+  setPointEdit(on: boolean): void {
+    this.pointEditOn = on;
+    this.nodeTool.cancel();
+    this.nodeTool.setSelection(null);
+    this.dropPreview();
+    this.emit();
+  }
+  get nodeSelection(): NodeSel | null {
+    return this.nodeTool.selection;
+  }
+
+  private pathsOf(doc: Composition, id: Id): NodePath[] | undefined {
+    const d = doc.layers.find((l) => l.id === id)?.shape?.path;
+    if (d === undefined) return undefined;
+    if (this.parsed?.d !== d) {
+      try {
+        this.parsed = { d, paths: parseNodes(d) };
+      } catch {
+        return undefined;
+      }
+    }
+    return this.parsed.paths;
+  }
+
+  /** The shape being point-edited, if point editing is on and the selection is an editable shape. */
+  private pointLayer(): Id | null {
+    const id = this.tool.selection;
+    return this.pointEditOn && id !== null && this.pathsOf(this.document, id) ? id : null;
+  }
+
+  private nodeContext(id: Id): NodeContext | null {
+    const item = evaluateScene(this.document, this.time).find((i) => i.id === id);
+    const paths = this.pathsOf(this.document, id);
+    if (!item || !paths) return null;
+    const k = Math.hypot(this.view[0], this.view[1]);
+    return { paths, matrix: item.matrix, unitsPerPx: k > 0 ? 1 / k : 1 };
+  }
+
+  private editPoints(id: Id, paths: readonly NodePath[]) {
+    return editShape(id, "Edit points", (s) => ({ ...s, path: nodesToPath(paths) }));
+  }
+
+  private routeNode(id: Id, out: NodeOutput): void {
+    if (out.edit) {
+      const cmd = this.editPoints(id, out.edit.paths);
+      if (out.edit.final) {
+        this.preview = null;
+        this.execute(cmd);
+        return;
+      }
+      this.preview = cmd.apply(this.document);
+    }
+    if (out.edit || out.select !== undefined) this.emit();
+  }
+
+  /** Smooth / corner / delete for the selected point. */
+  nodeAction(kind: "smooth" | "corner" | "delete"): void {
+    const id = this.tool.selection;
+    const sel = this.nodeTool.selection;
+    const paths = id ? this.pathsOf(this.document, id) : undefined;
+    if (!id || !sel || !paths || !paths[sel.pi]?.nodes[sel.ni]) return;
+    const next = kind === "smooth" ? setSmooth(paths, sel.pi, sel.ni) : kind === "corner" ? setCorner(paths, sel.pi, sel.ni) : deleteNode(paths, sel.pi, sel.ni);
+    if (kind === "delete") this.nodeTool.setSelection(null);
+    this.execute(this.editPoints(id, next));
+  }
+
+  /** Whether the selected point is smooth (for the UI's Smooth/Corner state), or null when nothing is selected. */
+  selectedNodeSmooth(): boolean | null {
+    const id = this.tool.selection;
+    const sel = this.nodeTool.selection;
+    const n = id && sel ? this.pathsOf(this.document, id)?.[sel.pi]?.nodes[sel.ni] : undefined;
+    return n ? isSmooth(n) : null;
+  }
+
+  /** Points and the selected point's handles in canvas CSS pixels, for drawing. Null when not point editing. */
+  nodeOverlay(): { nodes: { x: number; y: number; selected: boolean }[]; handles: { x: number; y: number; fromX: number; fromY: number }[] } | null {
+    const id = this.pointLayer();
+    if (!id) return null;
+    const item = evaluateScene(this.displayed, this.time).find((i) => i.id === id);
+    const paths = this.pathsOf(this.displayed, id);
+    if (!item || !paths) return null;
+    const m = multiply(this.view, item.matrix);
+    const sel = this.nodeTool.selection;
+    const nodes: { x: number; y: number; selected: boolean }[] = [];
+    const handles: { x: number; y: number; fromX: number; fromY: number }[] = [];
+    paths.forEach((p, pi) =>
+      p.nodes.forEach((n, ni) => {
+        const [x, y] = apply(m, n.x, n.y);
+        const selected = !!sel && sel.pi === pi && sel.ni === ni;
+        nodes.push({ x, y, selected });
+        if (selected) {
+          if (n.ix || n.iy) handles.push({ fromX: x, fromY: y, ...pt(apply(m, n.x + n.ix, n.y + n.iy)) });
+          if (n.ox || n.oy) handles.push({ fromX: x, fromY: y, ...pt(apply(m, n.x + n.ox, n.y + n.oy)) });
+        }
+      }),
+    );
+    return { nodes, handles };
   }
 
   /** Scene to draw (with any in-progress drag applied). */
@@ -151,8 +267,16 @@ export class EditorController {
   pointerDown(p: PointerInput): void {
     if (p.type === "touch") {
       this.tool.cancel(); // a finger landing mid-drag means the user is navigating
+      this.nodeTool.cancel();
       this.dropPreview();
       this.gesture.down(p.id, p.x, p.y);
+      return;
+    }
+    const pl = this.pointLayer();
+    const nc = pl ? this.nodeContext(pl) : null;
+    if (pl && nc) {
+      const [x, y] = this.screenToComp(p.x, p.y);
+      this.routeNode(pl, this.nodeTool.down(p.id, x, y, nc));
       return;
     }
     this.route(this.tool.down(p.id, this.toolEvent(p), this.toolContext()));
@@ -167,6 +291,7 @@ export class EditorController {
       }
       return;
     }
+    if (this.nodeTool.dragging) return this.nodeEvent("move", p);
     this.route(this.tool.move(p.id, this.toolEvent(p), this.toolContext()));
   }
 
@@ -175,6 +300,7 @@ export class EditorController {
       this.gesture.up(p.id);
       return;
     }
+    if (this.nodeTool.dragging) return this.nodeEvent("up", p);
     this.route(this.tool.up(p.id, this.toolEvent(p), this.toolContext()));
   }
 
@@ -182,9 +308,21 @@ export class EditorController {
     if (p.type === "touch") this.gesture.up(p.id);
     else {
       this.tool.cancel();
+      this.nodeTool.cancel();
       this.dropPreview();
       this.emit();
     }
+  }
+
+  private nodeEvent(kind: "move" | "up", p: PointerInput): void {
+    const id = this.tool.selection;
+    const nc = id ? this.nodeContext(id) : null;
+    if (!id || !nc) {
+      this.nodeTool.cancel();
+      return;
+    }
+    const [x, y] = this.screenToComp(p.x, p.y);
+    this.routeNode(id, kind === "move" ? this.nodeTool.move(p.id, x, y, nc) : this.nodeTool.up(p.id, x, y, nc));
   }
 
   private route(out: ToolOutput): void {
@@ -233,3 +371,5 @@ export class EditorController {
     if (sel !== null && !this.document.layers.some((l) => l.id === sel)) this.tool.setSelection(null);
   }
 }
+
+const pt = ([x, y]: [number, number]) => ({ x, y });

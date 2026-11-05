@@ -288,7 +288,9 @@ export function Editor() {
     if (id) ctrl.execute(removeLayer(id));
   };
 
-  const corners = () => (tick(), selectionCorners(ctrl));
+  const corners = () => (tick(), ctrl.pointEdit && ctrl.nodeOverlay() ? null : selectionCorners(ctrl));
+  const nodeView = () => (tick(), ctrl.nodeOverlay());
+  const canEditPoints = () => (tick(), !!ctrl.document.layers.find((l) => l.id === ctrl.selection)?.shape);
 
   return (
     <div class="app">
@@ -306,6 +308,7 @@ export function Editor() {
         <button onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}>Undo</button>
         <button onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}>Redo</button>
         <span class="sep" />
+        <button classList={{ on: (tick(), ctrl.pointEdit) }} aria-pressed={(tick(), ctrl.pointEdit)} disabled={!canEditPoints()} onClick={() => ctrl.setPointEdit(!ctrl.pointEdit)}>Points</button>
         <button classList={{ on: styleOpen() }} aria-pressed={styleOpen()} onClick={() => setStyleOpen(!styleOpen())}>Style</button>
         <button onClick={() => { setPlaying(false); setExporting(true); }}>Export</button>
         <span class="build" title="Build">{typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}</span>
@@ -336,7 +339,30 @@ export function Editor() {
               </>
             )}
           </Show>
+          <Show when={nodeView()}>
+            {(v) => (
+              <>
+                {v().handles.map((h) => (
+                  <>
+                    <line x1={h.fromX} y1={h.fromY} x2={h.x} y2={h.y} class="node-arm" />
+                    <circle cx={h.x} cy={h.y} r="7" class="node-handle" />
+                  </>
+                ))}
+                {v().nodes.map((n) => (
+                  <rect x={n.x - 6} y={n.y - 6} width="12" height="12" class="node" classList={{ selected: n.selected }} />
+                ))}
+              </>
+            )}
+          </Show>
         </svg>
+        <Show when={nodeView()}>
+          <div class="nodebar">
+            <button disabled={(tick(), ctrl.selectedNodeSmooth() === null)} onClick={() => ctrl.nodeAction("smooth")} classList={{ on: (tick(), ctrl.selectedNodeSmooth() === true) }}>Smooth</button>
+            <button disabled={(tick(), ctrl.selectedNodeSmooth() === null)} onClick={() => ctrl.nodeAction("corner")}>Corner</button>
+            <button disabled={(tick(), ctrl.selectedNodeSmooth() === null)} onClick={() => ctrl.nodeAction("delete")}>Delete point</button>
+            <span class="hint">Tap the outline to add a point</span>
+          </div>
+        </Show>
         <Graph ctrl={ctrl} tick={tick} picked={picked} />
         <Show when={update()}>
           {(apply) => (

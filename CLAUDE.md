@@ -66,6 +66,8 @@ Projects: several projects in OPFS (`p-…` ids, `rf.current` in localStorage re
 
 Style: per-layer blend (normal/multiply/screen/add: only modes the fixed GPU blend stage does exactly on an opaque backdrop; overlay etc. need a backdrop copy and are not built), fill none/solid/linear/radial gradient (per-pixel shader over the fill bbox, up to 8 stops), stroke colour/width/join/cap, in the Style side panel (`src/app/Style.tsx`, pure edits in `src/editor/styleEdit.ts`). Colour pickers are native `<input type=color>`.
 
+Point editing: toolbar Points button edits the selected shape's anchors and bezier handles (`src/geometry/nodes.ts` model + ops, `src/editor/nodeTool.ts` pen interaction, controller `pointEdit`/`nodeOverlay`/`nodeAction`). Shape paths are rewritten as plain M/L/C/Z strings on the first edit. Tap a point to select, drag points/handles, tap the outline to add a point, Smooth/Corner/Delete in the bar. Points are static (not keyframed).
+
 Not built: SVG import, text, audio (video clips export silent), composition size/fps UI, slipping/moving a clip on the timeline.
 
 Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.
