@@ -29,8 +29,9 @@ const doc = {
 await page.evaluate((d) => window.__rf.ctrl.replaceDocument(d), doc);
 await page.getByText("Export", { exact: true }).first().click();
 console.log("dialog text:", (await page.locator(".sheet p").first().innerText()).replace(/\s+/g, " "));
-await page.getByText("720p · 30 fps").click();
+await page.getByText(process.env.PRESET ?? "720p · 30 fps").click();
 console.log("after choosing 720p30:", (await page.locator(".sheet p").first().innerText()).replace(/\s+/g, " "));
+if (process.env.COMPAT) await page.getByLabel(/Compatibility mode/).check();
 await page.locator(".sheet .primary").click();
 await page.waitForSelector(".sheet video", { timeout: 120000 });
 console.log("result:", (await page.locator(".sheet p").first().innerText()).replace(/\s+/g, " "));

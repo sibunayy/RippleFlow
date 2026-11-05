@@ -48,7 +48,7 @@ await page.evaluate(() => window.__rf.ctrl.undo()); // drop the big one again so
 // Export 1 s at 720p30 and save for ffmpeg.
 await page.evaluate(() => { const c = window.__rf.ctrl; c.replaceDocument({ ...c.document, duration: 1 }); });
 await page.getByText("Export", { exact: true }).first().click();
-await page.getByText("720p · 30 fps").click();
+await page.getByText(process.env.PRESET ?? "720p · 30 fps").click();
 await page.locator(".sheet .primary").click();
 await page.waitForSelector(".sheet video", { timeout: 120000 });
 const b64 = await page.evaluate(async () => { const buf = new Uint8Array(await (await fetch(document.querySelector(".sheet video").src)).arrayBuffer()); let s = ""; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000)); return btoa(s); });

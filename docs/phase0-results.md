@@ -61,3 +61,11 @@ The user uploaded an MP4 exported by the app on the iPad (1080p30, 6 s, keyframe
 - Chromium in the container reports the same tag but its samples really are full range, so the bug does not reproduce there.
 
 Fix: the exporter now converts RGB to BT.709 limited-range NV12 on the GPU (`src/render/nv12Readback.ts`), hands the encoder those planes with an explicit colour space, and writes its own `colr` (BT.709, limited). Container check: native Y/U/V within 1 of the reference, white backdrop Y=235, decoded white 255. **Not yet verified on the iPad:** that Safari's encoder passes NV12 input through unchanged and does not re-tag or re-convert it. Verify by exporting again and checking `ffprobe` colour tags and native luma of a white backdrop (expect Y=235, tag `tv`).
+
+### Follow-up: NV12 export came out garbled on the iPad
+
+The first export from the NV12 pipeline (iPad, 1080p, build with the colour fix) had the right colour tags (`tv`, BT.709, `colr` limited) but the picture was scrambled into horizontal streaks. Cause (inferred, consistent with every observation): the NV12 `VideoFrame` was built with a padded row stride (WebGPU pads readback rows to 256 bytes; 1920 wide becomes 2048) passed through the `layout` option. Chromium honours that. Safari evidently did not, reading rows as if tightly packed, which shears the picture by 128 px per row.
+
+The container missed it because the earlier container checks used 720p (1280 is a multiple of 256, so no padding). Always verify exports at 1080p as well.
+
+Fix: pack the planes tightly on the CPU (`packNv12Tight`) and pass no `layout`. Container-verified at 1080p (plain, image and video exports). **Not yet verified on the iPad.** Fallback in the export dialog: "Compatibility mode" uses the RGBA frame path that produced a correct picture on the iPad earlier, tagged limited range (Safari's measured behaviour).

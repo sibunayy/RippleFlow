@@ -35,6 +35,13 @@ export function exportSize(comp: Composition, preset: ExportPreset): { width: nu
 
 export interface ExportOptions {
   readonly preset: ExportPreset;
+  /**
+   * "nv12" (default): the GPU converts to BT.709 limited-range YUV and the encoder gets those planes.
+   * "rgba": hand the encoder RGBA frames and let it convert (the original path, which gave a correct
+   * picture on the iPad). A fallback in case a browser mishandles NV12 input. Safari encoded that
+   * as limited range, so the file is tagged limited; this is Safari's measured behaviour, not a guarantee.
+   */
+  readonly pixelFormat?: "nv12" | "rgba";
   readonly signal?: AbortSignal;
   /** Resolves a loaded picture by asset id (image layers). */
   readonly bitmapOf?: (asset: string) => ImageBitmap | undefined;
@@ -54,7 +61,10 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
   canvas.width = width;
   canvas.height = height;
   const renderer = await MeshRenderer.create(canvas);
-  const readback = renderer.createNv12Readback();
+  const rgba = opts.pixelFormat === "rgba";
+  const nv12 = rgba ? null : renderer.createNv12Readback();
+  const rgbaReadback = rgba ? renderer.createReadback() : null;
+  const bgra = renderer.format === "bgra8unorm";
   try {
     const bg = comp.background ?? DEFAULT_BACKGROUND;
     renderer.clearColor = { r: bg[0], g: bg[1], b: bg[2], a: 1 };
@@ -89,7 +99,18 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
         }
         const draws = [backgroundDraw(comp, toDevice), ...drawsFor(items, (id) => geometry.get(id), toDevice, (id) => media.get(id))];
         sync.sync(renderer, draws);
-        const data = await readback.read();
+        if (rgbaReadback) {
+          const data = await rgbaReadback.read();
+          return new VideoFrame(data, {
+            format: bgra ? "BGRA" : "RGBA",
+            codedWidth: width,
+            codedHeight: height,
+            timestamp,
+            duration,
+            layout: [{ offset: 0, stride: rgbaReadback.bytesPerRow }],
+          });
+        }
+        const data = await nv12!.read();
         return new VideoFrame(data, {
           format: "NV12",
           codedWidth: width,
@@ -97,16 +118,14 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
           timestamp,
           duration,
           colorSpace: BT709_LIMITED,
-          layout: [
-            { offset: 0, stride: readback.stride },
-            { offset: readback.stride * height, stride: readback.stride },
-          ],
+          // No `layout`: the data is tightly packed, which is the default for NV12.
         });
       },
       opts.onProgress,
     );
   } finally {
-    readback.destroy();
+    nv12?.destroy();
+    rgbaReadback?.destroy();
     renderer.destroy();
   }
 }

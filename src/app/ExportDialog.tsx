@@ -19,6 +19,7 @@ export function ExportDialog(props: { comp: () => Composition; bitmapOf: (asset:
   const [preset, setPreset] = createSignal<ExportPreset>(PRESETS[1]!);
   const [phase, setPhase] = createSignal<Phase>({ kind: "idle" });
   const [saveNote, setSaveNote] = createSignal<string | null>(null);
+  const [compat, setCompat] = createSignal(false);
   let abort: AbortController | null = null;
 
   const supported = typeof VideoEncoder !== "undefined" && !!navigator.gpu;
@@ -41,6 +42,7 @@ export function ExportDialog(props: { comp: () => Composition; bitmapOf: (asset:
     try {
       const r = await exportComposition(comp, {
         preset: preset(),
+        pixelFormat: compat() ? "rgba" : "nv12",
         signal: abort.signal,
         bitmapOf: props.bitmapOf,
         videos: session,
@@ -91,6 +93,9 @@ export function ExportDialog(props: { comp: () => Composition; bitmapOf: (asset:
             <p>
               {size().width}×{size().height}, {props.comp().duration.toFixed(1)} s, up to about {mb(estimate())}. No audio.
             </p>
+            <label class="compat">
+              <input type="checkbox" checked={compat()} onChange={(e) => setCompat(e.currentTarget.checked)} /> Compatibility mode (use if the exported video looks garbled)
+            </label>
             <Show when={(phase() as { message?: string }).message}>
               <p class="warn">Export failed: {(phase() as { message: string }).message}</p>
             </Show>
