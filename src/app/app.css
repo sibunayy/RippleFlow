@@ -112,3 +112,12 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .stop .mini { min-height: 40px; }
 .mini { min-width: 40px; min-height: 40px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 18px; }
 .mini:disabled { opacity: 0.35; }
+.node { fill: #fff; stroke: #4aa3ff; stroke-width: 2; }
+.node.selected { fill: #4aa3ff; stroke: #fff; }
+.node-handle { fill: #ffd24a; stroke: #1a1a1f; stroke-width: 1.5; }
+.node-arm { stroke: #ffd24a; stroke-width: 1.5; }
+.nodebar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 6px; background: #24242bee; border-radius: 12px; z-index: 2; white-space: nowrap; }
+.nodebar button { min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 14px; }
+.nodebar button.on { outline: 2px solid #4aa3ff; }
+.nodebar button:disabled { opacity: 0.4; }
+.nodebar .hint { padding: 0 6px; }
