@@ -67,3 +67,5 @@ Not built: SVG import, project list/naming, file open/save, text, audio (video c
 Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.
 
 Container gotchas: the software GPU cannot read back a buffer while a canvas is being presented, so test pages use `?debug&noloop` and the `window.__rf` hook (no canvas present, manual frames).
+
+Export colour: the encoder's own colour tags cannot be trusted (Safari tags full range on limited-range data). The exporter feeds NV12 it converted itself and writes its own `colr`; check any export change with ffprobe tags plus native Y of a white backdrop (expect 235, `tv`).

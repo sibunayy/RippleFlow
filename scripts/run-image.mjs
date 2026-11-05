@@ -27,7 +27,7 @@ const check = async (label) => {
 };
 
 await open();
-await page.setInputFiles("input[type=file]", img);
+await page.setInputFiles('input[accept="image/*"]', img);
 await page.waitForFunction(() => window.__rf.ctrl.document.layers.length === 1);
 const l = await page.evaluate(() => window.__rf.ctrl.document.layers[0]);
 console.log("layer:", l.kind, l.name, JSON.stringify(l.image), "scale", l.transform.scaleX.keys[0].value.toFixed(3));
@@ -40,7 +40,7 @@ console.log("50% opacity red over white (expect ~255,128,128):", await px(744, 3
 await page.getByLabel("Opacity %").fill("100"); await page.getByLabel("Opacity %").press("Enter");
 
 // Large picture is downscaled on import.
-await page.setInputFiles("input[type=file]", big);
+await page.setInputFiles('input[accept="image/*"]', big);
 await page.waitForFunction(() => window.__rf.ctrl.document.layers.length === 2);
 console.log("big import:", JSON.stringify(await page.evaluate(() => window.__rf.ctrl.document.layers[1].image)));
 await page.evaluate(() => window.__rf.ctrl.undo()); // drop the big one again so the spots are unambiguous

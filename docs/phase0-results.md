@@ -50,3 +50,14 @@ software GPU: it can check logic and correctness, not speed or real-GPU behaviou
 2. Throttling on a 30 s or longer export, and on a heavier scene.
 3. How many simultaneous video decoders iPadOS allows.
 4. Pencil: palm rejection (runs 2 and 3, the latter in standalone mode, saw no touch during pen use; the tester later reported palm rejection "is good" in hand use, which is their observation, not a measurement); whether `getPredictedEvents` returns usable points; display refresh rate (about 60 Hz is inferred from 4 pen samples per frame); true input-to-photon latency.
+
+## Export colour range (found from a real iPad export)
+
+The user uploaded an MP4 exported by the app on the iPad (1080p30, 6 s, keyframe every 1 s). Measured with ffprobe/ffmpeg:
+
+- The white backdrop decodes to RGB 233 to 235, not 255, and the orange rectangle is 231,174,55 instead of the 250,184,51 that was drawn. Native luma of the backdrop is 233 to 235.
+- The file's `colr` box says BT.709 primaries, **sRGB transfer, full range**. The SPS has no VUI block, so `colr` is the only colour tag.
+- So Safari's H.264 encoder produced **limited-range** samples (white = about 235) while reporting **full range**. `mp4-muxer` copied the encoder-reported colour space into `colr`. Players that honour the tag show white as light grey and blacks as dark grey (contrast compressed to 16..235).
+- Chromium in the container reports the same tag but its samples really are full range, so the bug does not reproduce there.
+
+Fix: the exporter now converts RGB to BT.709 limited-range NV12 on the GPU (`src/render/nv12Readback.ts`), hands the encoder those planes with an explicit colour space, and writes its own `colr` (BT.709, limited). Container check: native Y/U/V within 1 of the reference, white backdrop Y=235, decoded white 255. **Not yet verified on the iPad:** that Safari's encoder passes NV12 input through unchanged and does not re-tag or re-convert it. Verify by exporting again and checking `ffprobe` colour tags and native luma of a white backdrop (expect Y=235, tag `tv`).
