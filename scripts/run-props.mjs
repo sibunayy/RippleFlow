@@ -42,5 +42,21 @@ await page.mouse.move(inn.x + inn.width / 2 + px * 5, inn.y + inn.height / 2, { 
 await page.mouse.up();
 l = await doc();
 console.log("in past out ->", l.inPoint?.toFixed(3), "out", l.outPoint?.toFixed(3), "(in < out:", l.inPoint < l.outPoint + 1e-9, ")");
+// Scrub: drag the Rotate field right by 40 px (0.5 deg/px = +20), one undo step, preview shows live.
+const rot = page.getByLabel("Rotate °");
+const before = await page.evaluate(() => window.__rf.ctrl.document.layers[0].transform.rotation.keys[0].value);
+const rb = await page.locator(".scrub", { has: rot }).boundingBox();
+await page.mouse.move(rb.x + 20, rb.y + 30); await page.mouse.down();
+await page.mouse.move(rb.x + 40, rb.y + 30, { steps: 4 });
+await page.mouse.move(rb.x + 60, rb.y + 30, { steps: 4 });
+console.log("committed during drag (expect", before, "):", await page.evaluate(() => window.__rf.ctrl.document.layers[0].transform.rotation.keys[0].value), "box:", await rot.inputValue());
+await page.mouse.up();
+const after = await page.evaluate(() => window.__rf.ctrl.document.layers[0].transform.rotation.keys[0].value);
+console.log("rotation", before, "->", after, "(expect +20)");
+await page.getByText("Undo", { exact: true }).click();
+console.log("after one undo:", await page.evaluate(() => window.__rf.ctrl.document.layers[0].transform.rotation.keys[0].value));
+// Tap types.
+await page.mouse.click(rb.x + 20, rb.y + 30);
+console.log("tap focuses input:", await page.evaluate(() => document.activeElement?.getAttribute("aria-label")));
 console.log("errors:", errors.length ? errors : "none");
 await browser.close();
