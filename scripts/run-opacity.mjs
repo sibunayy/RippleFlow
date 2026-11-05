@@ -10,6 +10,7 @@ page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 await page.goto(url);
 await page.waitForFunction(() => window.__rf);
+await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
 const px = (cx, cy) => page.evaluate(async ([cx, cy]) => {
   window.__rf.frame();
   const { ctrl, renderer } = window.__rf; const m = ctrl.view;

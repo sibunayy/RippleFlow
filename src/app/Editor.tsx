@@ -31,6 +31,17 @@ declare global {
   }
 }
 
+function Tool(props: { glyph: string; label: string; onClick: () => void; on?: boolean; disabled?: boolean; title?: string }) {
+  return (
+    <button class="tool" classList={{ on: !!props.on }} aria-label={props.label} aria-pressed={props.on === undefined ? undefined : !!props.on} title={props.title ?? props.label} disabled={props.disabled} onClick={props.onClick}>
+      <span class="glyph" aria-hidden="true">{props.glyph}</span>
+      <small aria-hidden="true">{props.label}</small>
+    </button>
+  );
+}
+
+const fmtTime = (t: number): string => `${String(Math.floor(t / 60)).padStart(2, "0")}:${(t % 60).toFixed(2).padStart(5, "0")}`;
+
 export function Editor() {
   let canvas!: HTMLCanvasElement;
   let stage!: HTMLDivElement;
@@ -45,6 +56,8 @@ export function Editor() {
   const [projectsOpen, setProjectsOpen] = createSignal(false);
   const [compOpen, setCompOpen] = createSignal(false);
   const [styleOpen, setStyleOpen] = createSignal(true);
+  // Transform values, align and presets are tucked away until asked for.
+  const [propsOpen, setPropsOpen] = createSignal(false);
   const [projectId, setProjectId] = createSignal(LEGACY_ID);
   const [update, setUpdate] = createSignal<(() => void) | null>(null);
   const store: ProjectStore = opfsAvailable() ? new OpfsStore() : new MemoryStore();
@@ -330,49 +343,33 @@ export function Editor() {
 
   return (
     <div class="app">
-      <header class="bar">
-        <button class="proj" title="Projects" onClick={() => { setPlaying(false); setProjectsOpen(true); }}>{(tick(), ctrl.document.name ?? "Project")} ▾</button>
-        <button title="Composition size, frame rate, length" onClick={() => { setPlaying(false); setCompOpen(true); }}>Comp</button>
-        <button onClick={() => add("rect")}>Rect</button>
-        <button onClick={() => add("ellipse")}>Ellipse</button>
-        <button onClick={() => add("star")}>Star</button>
-        <select
-          class="more-shapes"
-          aria-label="More shapes"
-          value=""
-          onChange={(e) => {
-            const k = e.currentTarget.value as ShapeKind;
-            e.currentTarget.value = "";
-            if (k) add(k);
-          }}>
-          <option value="">More…</option>
-          <For each={MORE_SHAPES}>{(m) => <option value={m.kind}>{m.label}</option>}</For>
-        </select>
-        <button onClick={addText}>Text</button>
-        <button onClick={addNull}>Null</button>
-        <button onClick={() => fileInput.click()}>Image</button>
-        <button onClick={() => videoInput.click()}>Video</button>
-        <button title="Import an SVG as editable shapes" onClick={() => svgInput.click()}>SVG</button>
+      <header class="bar top">
+        <div class="top-left">
+          <span class="logo" aria-hidden="true" />
+          <button class="proj" title="Projects" onClick={() => { setPlaying(false); setProjectsOpen(true); }}>{(tick(), ctrl.document.name ?? "Project")} ▾</button>
+          <span class="save" classList={{ bad: saveState() === "error" || saveState() === "unavailable" }}>
+            {({ saved: "Saved", saving: "Saving…", dirty: "Unsaved", error: "Save failed", unavailable: "Not saved: storage unavailable" } as const)[saveState()]}
+          </span>
+        </div>
+        <div class="transport">
+          <button class="t-play" aria-label={playing() ? "Pause" : "Play"} onClick={() => setPlaying(!playing())}>{playing() ? "❚❚" : "▶"}</button>
+          <span class="time">{(tick(), fmtTime(ctrl.time))}<span class="of"> / {ctrl.document.duration.toFixed(1)}</span></span>
+          <label class="autokey" title="Record changes as keyframes">
+            <input type="checkbox" onChange={(e) => (ctrl.autoKey = e.currentTarget.checked)} /> Auto-key
+          </label>
+        </div>
+        <div class="top-right">
+          <span class="build" title="Build">{typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}</span>
+          <button class="pill" title="Composition size, frame rate, length" onClick={() => { setPlaying(false); setCompOpen(true); }}>Comp</button>
+          <button class="pill" classList={{ on: propsOpen() }} aria-pressed={propsOpen()} title="Position, scale, rotation, align, presets" onClick={() => setPropsOpen(!propsOpen())}>Transform</button>
+          <button class="pill" classList={{ on: styleOpen() }} aria-pressed={styleOpen()} onClick={() => setStyleOpen(!styleOpen())}>Style</button>
+          <button class="round" title="Undo" onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}><span aria-hidden="true">↶</span><span class="sr">Undo</span></button>
+          <button class="round" title="Redo" onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}><span aria-hidden="true">↷</span><span class="sr">Redo</span></button>
+          <button class="export" onClick={() => { setPlaying(false); setExporting(true); }}>Export</button>
+        </div>
         <input ref={svgInput} type="file" accept=".svg,image/svg+xml" hidden onChange={(e) => void importSvgFiles(e.currentTarget.files)} />
         <input ref={videoInput} type="file" accept="video/*,.mov,.mp4,.m4v" hidden onChange={(e) => void importVideos(e.currentTarget.files)} />
         <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => void importFiles(e.currentTarget.files)} />
-        <button onClick={del} disabled={(tick(), ctrl.selection === null)}>Delete</button>
-        <span class="sep" />
-        <button onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}>Undo</button>
-        <button onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}>Redo</button>
-        <span class="sep" />
-        <button classList={{ on: (tick(), ctrl.pinMode) }} aria-pressed={(tick(), ctrl.pinMode)} disabled={!canPin()} onClick={() => ctrl.setPinMode(!ctrl.pinMode)}>Pins</button>
-        <button classList={{ on: penning() }} aria-pressed={penning()} onClick={() => (penning() ? ctrl.cancelPen() : ctrl.startPen({ kind: "shape" }))}>Pen</button>
-        <button classList={{ on: (tick(), ctrl.pointEdit) }} aria-pressed={(tick(), ctrl.pointEdit)} disabled={!canEditPoints()} onClick={() => ctrl.setPointEdit(!ctrl.pointEdit)}>Points</button>
-        <button classList={{ on: styleOpen() }} aria-pressed={styleOpen()} onClick={() => setStyleOpen(!styleOpen())}>Style</button>
-        <button onClick={() => { setPlaying(false); setExporting(true); }}>Export</button>
-        <span class="build" title="Build">{typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}</span>
-        <span class="save" classList={{ bad: saveState() === "error" || saveState() === "unavailable" }}>
-          {({ saved: "Saved", saving: "Saving…", dirty: "Unsaved", error: "Save failed", unavailable: "Not saved: storage unavailable" } as const)[saveState()]}
-        </span>
-        <label>
-          <input type="checkbox" onChange={(e) => (ctrl.autoKey = e.currentTarget.checked)} /> Auto-key
-        </label>
       </header>
       <div class="workspace">
       <div class="stage" ref={stage}>
@@ -383,6 +380,44 @@ export function Editor() {
           onPointerUp={onUp}
           onPointerCancel={onCancel}
         />
+        <nav class="rail" aria-label="Tools">
+          <div class="rail-group">
+            <Tool glyph="▢" label="Rect" onClick={() => add("rect")} />
+            <Tool glyph="◯" label="Ellipse" onClick={() => add("ellipse")} />
+            <Tool glyph="☆" label="Star" onClick={() => add("star")} />
+            <select
+              class="more-shapes"
+              aria-label="More shapes"
+              value=""
+              onChange={(e) => {
+                const k = e.currentTarget.value as ShapeKind;
+                e.currentTarget.value = "";
+                if (k) add(k);
+              }}>
+              <option value="">More…</option>
+              <For each={MORE_SHAPES}>{(m) => <option value={m.kind}>{m.label}</option>}</For>
+            </select>
+            <Tool glyph="✒" label="Pen" on={penning()} onClick={() => (penning() ? ctrl.cancelPen() : ctrl.startPen({ kind: "shape" }))} />
+            <Tool glyph="𝑇" label="Text" onClick={addText} />
+          </div>
+          <div class="rail-group">
+            <Tool glyph="▣" label="Image" onClick={() => fileInput.click()} />
+            <Tool glyph="▷" label="Video" onClick={() => videoInput.click()} />
+            <Tool glyph="❖" label="SVG" title="Import an SVG as editable shapes" onClick={() => svgInput.click()} />
+            <Tool glyph="∅" label="Null" onClick={addNull} />
+          </div>
+          <div class="rail-group">
+            <Tool glyph="⌖" label="Pins" on={(tick(), ctrl.pinMode)} disabled={!canPin()} onClick={() => ctrl.setPinMode(!ctrl.pinMode)} />
+            <Tool glyph="◇" label="Points" on={(tick(), ctrl.pointEdit)} disabled={!canEditPoints()} onClick={() => ctrl.setPointEdit(!ctrl.pointEdit)} />
+            <Tool glyph="⌫" label="Delete" disabled={(tick(), ctrl.selection === null)} onClick={del} />
+          </div>
+        </nav>
+        <Show when={propsOpen()}>
+          <div class="props-pop">
+            <button class="props-close round" aria-label="Hide transform panel" onClick={() => setPropsOpen(false)}>✕</button>
+            <Props ctrl={ctrl} tick={tick} />
+                </div>
+        </Show>
         <svg class="overlay">
           <Show when={corners()}>
             {(c) => (
@@ -529,20 +564,7 @@ export function Editor() {
       <Show when={exporting()}>
         <ExportDialog comp={() => ctrl.document} bitmapOf={(a) => images.bitmapOf(a)} videoSession={() => videos.exportSession()} onClose={() => setExporting(false)} />
       </Show>
-      <Props ctrl={ctrl} tick={tick} />
       <Timeline ctrl={ctrl} tick={tick} picked={picked} setPicked={setPicked} />
-      <footer class="bar">
-        <button onClick={() => setPlaying(!playing())}>{playing() ? "Pause" : "Play"}</button>
-        <input
-          type="range"
-          min="0"
-          max={ctrl.document.duration}
-          step="0.01"
-          value={(tick(), ctrl.time)}
-          onInput={(e) => ctrl.setTime(Number(e.currentTarget.value))}
-        />
-        <span class="time">{(tick(), ctrl.time.toFixed(2))}s</span>
-      </footer>
     </div>
   );
 }

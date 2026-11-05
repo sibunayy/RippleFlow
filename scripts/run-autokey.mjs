@@ -9,6 +9,7 @@ page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 await page.goto(process.argv[2]);
 await page.waitForFunction(() => window.__rf);
+await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
 const val = (prop, t) => page.evaluate(([prop, t]) => {
   const l = window.__rf.ctrl.document.layers[0]; const k = l.transform[prop].keys;
   // evaluate like the engine: scene opacity for opacity, matrix for the rest is overkill; read the track directly

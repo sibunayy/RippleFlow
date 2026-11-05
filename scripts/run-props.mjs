@@ -9,6 +9,7 @@ page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 await page.goto(process.argv[2]);
 await page.waitForFunction(() => window.__rf);
+await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
 const doc = () => page.evaluate(() => JSON.parse(JSON.stringify(window.__rf.ctrl.document.layers[0])));
 
 await page.getByText("Ellipse", { exact: true }).click();
