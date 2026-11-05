@@ -1,0 +1,87 @@
+/* Luminous Instrument: deep ink, floating islands, three signal colours. Loaded after app.css; colour, radius, spacing and type only. */
+:root {
+  --ink: #090c16; --ink-2: #0e1322; --graphite: #151b2e; --graphite-2: #1d2540; --line: #ffffff14;
+  --text: #e9edf7; --dim: #8f99b5;
+  --mint: #7cf2d0; --mint-ink: #04201a; --coral: #ff7a59; --violet: #9082ff;
+  --r-island: 26px; --r-ctl: 16px; --gap: 12px;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --sans: ui-rounded, system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --glow: 0 0 0 1px var(--line), 0 18px 48px #00000080;
+}
+:root, html, body, #root { font-family: var(--sans); background: var(--ink); color: var(--text); }
+.app {
+  gap: var(--gap);
+  padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background: radial-gradient(900px 500px at 15% -10%, #16304a55, transparent 70%), radial-gradient(700px 500px at 100% 110%, #2a1a4a40, transparent 70%), var(--ink);
+}
+/* Islands */
+.bar, .props, .timeline, .style, .stage { border-radius: var(--r-island); box-shadow: var(--glow); }
+.bar { padding: 8px 14px; background: var(--graphite); gap: 10px; }
+.props { background: var(--graphite); padding: 10px 18px; }
+.timeline { background: var(--graphite); overflow: hidden; }
+.workspace { gap: var(--gap); }
+.stage { background: var(--ink-2) radial-gradient(#ffffff0d 1px, transparent 1.2px) 0 0 / 22px 22px; }
+.style { background: var(--graphite); border: 0; padding: 14px 16px 18px; }
+.sep { background: var(--line); }
+footer.bar { border-radius: 999px; padding: 6px 18px; }
+/* Controls: large, rounded, quiet */
+.bar button, .tl-tools button, .nodebar button, .presets button, .sheet button, .sheet .btn, .fx-menu button, .mini, .more-shapes, .parent-pick select, .field-sel select, .anim-presets button, .seg button {
+  background: var(--graphite-2); color: var(--text); border-radius: var(--r-ctl); border: 1px solid var(--line);
+}
+.bar button, .tl-tools button { border-radius: 999px; }
+.seg button { border-radius: 0; } .seg button:first-child { border-radius: var(--r-ctl) 0 0 var(--r-ctl); } .seg button:last-child { border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
+.bar button.on, .sheet button.on, .nodebar button.on { outline: 0; border-color: var(--mint); color: var(--mint); box-shadow: 0 0 14px #7cf2d033; }
+.seg button.on, .sheet button.primary, .update button, .presets button.on { background: var(--mint); color: var(--mint-ink); border-color: transparent; font-weight: 600; }
+.anim-presets button.out { background: #2b1d2a; color: #ffb4a0; }
+.sheet button.danger { background: #5a2430; color: #ffb4b4; }
+.proj { font-family: var(--serif); font-style: italic; font-size: 19px; letter-spacing: .01em; }
+.time, .build, .scrub input, .tick, .save, .stop input { font-family: var(--mono); font-weight: 300; font-variant-numeric: tabular-nums; }
+.scrub-label, .style h3, .hint { color: var(--dim); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: 1; }
+.scrub input, .sheet input[type="text"], .text-input, .swatch input, .comp-grid input { background: var(--ink-2); border: 1px solid var(--line); border-radius: 14px; color: var(--text); }
+.scrub.editing input { outline: 2px solid var(--mint); }
+.style-group { border-top: 1px solid var(--line); }
+.fx-card { background: var(--ink-2); border: 1px solid var(--line); border-radius: 18px; }
+.props-name, .style h3 { font-family: var(--serif); font-style: italic; text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--text); }
+/* Timeline */
+.tl-row { border-top: 1px solid var(--line); }
+.tl-row.on { background: linear-gradient(90deg, #7cf2d014, transparent 70%); box-shadow: inset 3px 0 0 var(--mint); }
+.ruler { background: transparent; }
+.tick { border-left-color: var(--line); color: var(--dim); opacity: 1; font-size: 11px; }
+.bar-range { background: #7cf2d01f; border: 1px solid #7cf2d066; border-radius: 12px; }
+.trim::after { background: var(--mint); }
+.key { background: #fff; border-radius: 4px; box-shadow: 0 0 8px #ffffff55; }
+.key.picked { background: var(--mint); outline: 3px solid #7cf2d055; box-shadow: 0 0 14px var(--mint); }
+.playhead { background: var(--coral); width: 2px; box-shadow: 0 0 12px var(--coral); }
+.hint { text-transform: none; letter-spacing: 0; font-size: 12px; }
+/* Canvas overlays: mint selection, coral time/tension */
+.sel { stroke: #fff; stroke-width: 1.5; }
+.handle { fill: #fff; stroke: var(--mint); }
+.node { stroke: var(--mint); } .node.selected { fill: var(--mint); stroke: #fff; }
+.node-handle { fill: var(--violet); stroke: var(--ink); } .node-arm { stroke: var(--violet); }
+.pen-path { fill: #7cf2d01a; stroke: var(--mint); }
+.pin { fill: var(--coral); } .pin.selected { fill: var(--mint); }
+.nodebar { background: #151b2ee6; backdrop-filter: blur(14px); border-radius: 999px; box-shadow: var(--glow); }
+/* Graph editor */
+.graph { background: #151b2ef0; border-radius: 22px; box-shadow: var(--glow); }
+.g-box { fill: var(--ink-2); stroke: var(--line); } .g-lin { stroke: var(--line); }
+.g-curve { stroke: var(--mint); } .g-arm { stroke: var(--dim); }
+.g-handle { fill: var(--coral); stroke: var(--ink); }
+/* Sheets, notices */
+.modal { background: #04060cc0; backdrop-filter: blur(8px); }
+.sheet { background: var(--graphite); border-radius: 28px; box-shadow: var(--glow); }
+.sheet h2 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 24px; }
+.plist li.current .pick { outline: 0; border-color: var(--mint); }
+.error { background: #3a1a22; border: 1px solid #ff7a5955; border-radius: 18px; }
+.notice { background: #2e2616; } .update { background: #12302e; border-color: #7cf2d055; }
+.save.bad { color: var(--coral); }
+input[type="range"] { accent-color: var(--mint); }
+progress { accent-color: var(--mint); }
+/* The top bar holds many tools: scroll sideways instead of squashing them. */
+header.bar { overflow-x: auto; scrollbar-width: none; flex: none; }
+header.bar::-webkit-scrollbar { display: none; }
+header.bar > * { flex: none; white-space: nowrap; }
+header.bar .build { margin-left: auto; }
+.bar label { white-space: nowrap; }
+.bar .proj { max-width: 260px; }
+.empty { color: var(--dim); font-family: var(--serif); font-style: italic; }

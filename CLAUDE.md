@@ -96,7 +96,7 @@ Trim paths: Style > Stroke has Trim start/end % (keyframable with auto-key) that
 
 More shapes: toolbar "More…" menu adds rounded rect, triangle, hexagon, plus, arrow, heart and a stroked line (`MORE_SHAPES` in `src/app/shapes.ts`). `scripts/run-shapes.mjs`.
 
-Not built: audio (video clips export silent), slipping a clip (changing which part plays without moving it).
+Look: "Luminous Instrument" (`src/app/theme.css`, loaded after `app.css`, colour/radius/spacing/type only): ink background, floating rounded islands (top bar, canvas, Style panel, Props, timeline, transport), mint = action/selection, coral = time/tension (playhead, pins), violet = bezier handles, italic serif for names, mono for numbers. Uses system fonts (ui-serif/ui-rounded/ui-monospace) so it works offline. Top bar scrolls sideways when tools overflow. Not built: audio (video clips export silent), slipping a clip (changing which part plays without moving it).
 
 Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.
 
