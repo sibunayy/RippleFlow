@@ -303,6 +303,8 @@ export function Editor() {
   const corners = () => (tick(), ctrl.pointEdit && ctrl.nodeOverlay() ? null : selectionCorners(ctrl));
   const nodeView = () => (tick(), ctrl.nodeOverlay());
   const penView = () => (tick(), ctrl.penOverlay());
+  const pinView = () => (tick(), ctrl.pinOverlay());
+  const canPin = () => (tick(), !!ctrl.document.layers.find((l) => l.id === ctrl.selection)?.image);
   const penning = () => (tick(), ctrl.penTarget !== null);
   const canEditPoints = () => (tick(), (() => { const l = ctrl.document.layers.find((x) => x.id === ctrl.selection); return !!l?.shape && !l.text; })());
 
@@ -324,6 +326,7 @@ export function Editor() {
         <button onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}>Undo</button>
         <button onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}>Redo</button>
         <span class="sep" />
+        <button classList={{ on: (tick(), ctrl.pinMode) }} aria-pressed={(tick(), ctrl.pinMode)} disabled={!canPin()} onClick={() => ctrl.setPinMode(!ctrl.pinMode)}>Pins</button>
         <button classList={{ on: penning() }} aria-pressed={penning()} onClick={() => (penning() ? ctrl.cancelPen() : ctrl.startPen({ kind: "shape" }))}>Pen</button>
         <button classList={{ on: (tick(), ctrl.pointEdit) }} aria-pressed={(tick(), ctrl.pointEdit)} disabled={!canEditPoints()} onClick={() => ctrl.setPointEdit(!ctrl.pointEdit)}>Points</button>
         <button classList={{ on: styleOpen() }} aria-pressed={styleOpen()} onClick={() => setStyleOpen(!styleOpen())}>Style</button>
@@ -352,6 +355,15 @@ export function Editor() {
                 <polygon points={c().map((p) => p.join(",")).join(" ")} class="sel" />
                 {c().map(([x, y]) => (
                   <circle cx={x} cy={y} r="7" class="handle" />
+                ))}
+              </>
+            )}
+          </Show>
+          <Show when={pinView()}>
+            {(v) => (
+              <>
+                {v().map((p) => (
+                  <circle cx={p.x} cy={p.y} r="11" class="pin" classList={{ selected: p.selected }} />
                 ))}
               </>
             )}
@@ -388,6 +400,13 @@ export function Editor() {
             )}
           </Show>
         </svg>
+        <Show when={pinView()}>
+          <div class="nodebar">
+            <button disabled={(tick(), ctrl.selectedPin === null)} onClick={() => ctrl.deleteSelectedPin()}>Delete pin</button>
+            <button onClick={() => ctrl.setPinMode(false)}>Done</button>
+            <span class="hint">Tap the picture to pin, drag a pin to pull. Auto-key records it.</span>
+          </div>
+        </Show>
         <Show when={penning()}>
           <div class="nodebar">
             <button disabled={(tick(), ctrl.penPoints === 0)} onClick={() => ctrl.undoPenPoint()}>Undo point</button>

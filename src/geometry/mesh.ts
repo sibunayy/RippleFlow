@@ -29,6 +29,10 @@ export class MeshBuilder {
 
 export interface Mesh {
   positions: Float32Array;
+  /** Optional texture coordinates (u, v per vertex, 0..1) for picture draws. Default: position divided by the mesh extent. */
+  uvs?: Float32Array;
+  /** Set on meshes rebuilt every frame (warped pictures): same key and vertex count means "update vertices in place". */
+  key?: string;
   indices: Uint32Array;
 }
 

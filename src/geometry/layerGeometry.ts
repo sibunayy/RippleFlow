@@ -24,6 +24,8 @@ export interface ShapePart {
    * scaled space; draw it with the layer matrix divided by (sx, sy).
    */
   readonly strokeAt?: (sx: number, sy: number) => Mesh;
+  /** Picture with puppet pins: the mesh is rebuilt from the pins each frame (size of the picture in pixels). */
+  readonly warp?: { readonly w: number; readonly h: number };
   /** Text layers with an animator: which character/word/line this part belongs to, and the point it turns and scales about. */
   readonly unit?: number;
   readonly pivot?: readonly [number, number];
@@ -110,8 +112,9 @@ const MISSING: readonly [number, number, number, number] = [0.4, 0.4, 0.45, 1];
  */
 export function buildImageGeometry(image: ImageContent, bitmap: ImageBitmap | undefined): ShapeGeometry {
   const mesh = rectMesh(image.width, image.height);
+  const warp = image.pins?.length ? { warp: { w: image.width, h: image.height } } : {};
   return {
-    parts: [bitmap ? { mesh, color: [1, 1, 1, 1], image: bitmap } : { mesh, color: MISSING }],
+    parts: [bitmap ? { mesh, color: [1, 1, 1, 1], image: bitmap, ...warp } : { mesh, color: MISSING }],
     bounds: { x: 0, y: 0, w: image.width, h: image.height },
   };
 }
