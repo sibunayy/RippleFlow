@@ -60,3 +60,31 @@ describe("evaluateScene", () => {
     expect(() => evaluateScene(comp([layer("a", { parent: "b" }), layer("b", { parent: "a" })]), 0)).toThrow(/cycle/i);
   });
 });
+
+import { addLayer as _addLayer, sequence, setDuration } from "./commands";
+import type { Composition as _Comp, Layer as _Layer } from "./types";
+
+describe("setDuration and sequence", () => {
+  const base = (): _Comp => ({ width: 10, height: 10, fps: 30, duration: 6, layers: [] });
+  const lay = (id: string): _Layer => ({
+    id,
+    name: id,
+    kind: "shape",
+    transform: { anchorX: { keys: [] }, anchorY: { keys: [] }, x: { keys: [] }, y: { keys: [] }, scaleX: { keys: [] }, scaleY: { keys: [] }, rotation: { keys: [] }, opacity: { keys: [] } },
+  });
+  it("changes the length, ignores a no-op, rejects nonsense", () => {
+    expect(setDuration(10).apply(base()).duration).toBe(10);
+    const b = base();
+    expect(setDuration(6).apply(b)).toBe(b);
+    expect(() => setDuration(0).apply(b)).toThrow();
+    expect(() => setDuration(NaN).apply(b)).toThrow();
+  });
+  it("runs commands in order as one step, and a failure changes nothing", () => {
+    const c = sequence("both", [setDuration(9), _addLayer(lay("a"))]).apply(base());
+    expect(c.duration).toBe(9);
+    expect(c.layers.map((l) => l.id)).toEqual(["a"]);
+    const b = base();
+    expect(() => sequence("bad", [setDuration(9), _addLayer(lay("a")), _addLayer(lay("a"))]).apply(b)).toThrow();
+    expect(b.duration).toBe(6); // inputs are immutable, so nothing leaked
+  });
+});

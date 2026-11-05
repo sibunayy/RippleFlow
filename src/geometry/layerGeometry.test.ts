@@ -23,3 +23,29 @@ describe("buildShapeGeometry", () => {
     expect(buildShapeGeometry({ path: "M0 0 L10 0 L10 10 Z" }).bounds).toBeUndefined();
   });
 });
+
+import { apply } from "../core/affine";
+import { buildVideoGeometry, displaySize, rotationMatrix } from "./layerGeometry";
+
+describe("video geometry", () => {
+  const near = (a: readonly number[], e: readonly number[]) => a.forEach((v, i) => expect(v).toBeCloseTo(e[i]!, 6));
+  it("rotation lands the coded corners on the display rectangle", () => {
+    // coded 1920x1080 landscape pixels, flagged to rotate 90 clockwise: shown 1080 wide, 1920 tall.
+    const m = rotationMatrix(90, 1920, 1080);
+    near(apply(m, 0, 0), [1080, 0]); // coded top-left goes to display top-right
+    near(apply(m, 1920, 0), [1080, 1920]);
+    near(apply(m, 0, 1080), [0, 0]);
+    const m270 = rotationMatrix(270, 1920, 1080);
+    near(apply(m270, 0, 0), [0, 1920]); // top-left goes to bottom-left
+    near(apply(m270, 1920, 1080), [1080, 0]);
+    const m180 = rotationMatrix(180, 1920, 1080);
+    near(apply(m180, 0, 0), [1920, 1080]);
+    expect(rotationMatrix(0, 1920, 1080)).toEqual([1, 0, 0, 1, 0, 0]);
+  });
+  it("reports display size and bounds after rotation", () => {
+    const v = { asset: "a", codedWidth: 1920, codedHeight: 1080, rotation: 90 as const, duration: 4, start: 0 };
+    expect(displaySize(v)).toEqual({ width: 1080, height: 1920 });
+    expect(buildVideoGeometry(v).bounds).toEqual({ x: 0, y: 0, w: 1080, h: 1920 });
+    expect(displaySize({ ...v, rotation: 0 })).toEqual({ width: 1920, height: 1080 });
+  });
+});

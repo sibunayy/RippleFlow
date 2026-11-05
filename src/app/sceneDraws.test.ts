@@ -33,7 +33,7 @@ describe("buildDraws", () => {
 describe("SceneSync", () => {
   it("re-uploads only when meshes change", () => {
     const c = make();
-    const t = { setScene: vi.fn(), setTransform: vi.fn() };
+    const t = { setScene: vi.fn(), setTransform: vi.fn(), setFrame: vi.fn() };
     const s = new SceneSync();
     expect(s.sync(t, buildDraws(c, 1))).toBe("scene");
     c.view = [3, 0, 0, 3, 0, 0];
@@ -52,5 +52,56 @@ describe("selectionCorners", () => {
     const k = selectionCorners(c)!;
     expect(k[0]).toEqual([-4, -4]); // stroke reach: 2px each side, doubled by the view
     expect(k[2]).toEqual([204, 104]);
+  });
+});
+
+describe("video draws", () => {
+  const video = { asset: "0123456789abcdef0123456789abcdef", codedWidth: 1920, codedHeight: 1080, rotation: 90 as const, duration: 4, start: 0 };
+  const vlayer: Layer = { ...rect, id: "v", kind: "video", shape: undefined, video };
+  const frameA = { tag: "a" } as unknown as VideoFrame;
+  const frameB = { tag: "b" } as unknown as VideoFrame;
+  const makeVideoCtrl = (frame: () => VideoFrame | undefined) => {
+    const c = new EditorController({ width: 1000, height: 500, fps: 30, duration: 5, layers: [] });
+    c.execute(addLayer(vlayer));
+    c.frameOf = () => {
+      const f = frame();
+      return f ? { frame: f } : undefined;
+    };
+    return c;
+  };
+
+  it("skips a video layer until its first frame has decoded", () => {
+    expect(buildDraws(makeVideoCtrl(() => undefined), 1)).toHaveLength(1); // backdrop only
+  });
+
+  it("applies the rotation to the draw and carries the frame", () => {
+    const c = makeVideoCtrl(() => frameA);
+    const d = buildDraws(c, 1);
+    expect(d).toHaveLength(2);
+    expect(d[1]!.frame).toBe(frameA);
+    // identity view and layer matrix, so the transform is exactly the 90 degree rotation of the coded rectangle
+    expect(d[1]!.transform).toEqual([0, 1, -1, 0, 1080, 0]);
+  });
+
+  it("a new frame of the same clip swaps the texture only; geometry is not re-uploaded", () => {
+    let cur = frameA;
+    const c = makeVideoCtrl(() => cur);
+    const t = { setScene: vi.fn(), setTransform: vi.fn(), setFrame: vi.fn() };
+    const s = new SceneSync();
+    expect(s.sync(t, buildDraws(c, 1))).toBe("scene");
+    cur = frameB;
+    expect(s.sync(t, buildDraws(c, 1))).toBe("transforms");
+    expect(t.setScene).toHaveBeenCalledTimes(1);
+    expect(t.setFrame).toHaveBeenCalledWith(1, frameB);
+  });
+
+  it("the first frame arriving rebuilds the scene (the draw did not exist before)", () => {
+    let cur: VideoFrame | undefined;
+    const c = makeVideoCtrl(() => cur);
+    const t = { setScene: vi.fn(), setTransform: vi.fn(), setFrame: vi.fn() };
+    const s = new SceneSync();
+    s.sync(t, buildDraws(c, 1));
+    cur = frameA;
+    expect(s.sync(t, buildDraws(c, 1))).toBe("scene");
   });
 });

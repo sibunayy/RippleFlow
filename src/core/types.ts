@@ -64,6 +64,21 @@ export interface ImageContent {
   readonly height: number;
 }
 
+/** Reference to an imported video clip. The file lives in the asset store under `asset`. */
+export interface VideoContent {
+  /** Content fingerprint (lowercase hex). */
+  readonly asset: string;
+  /** Frame size as coded in the file, before rotation. */
+  readonly codedWidth: number;
+  readonly codedHeight: number;
+  /** Clockwise degrees the file asks players to rotate frames by (phones store portrait clips sideways). */
+  readonly rotation: 0 | 90 | 180 | 270;
+  /** Clip length in seconds. */
+  readonly duration: number;
+  /** Composition time, in seconds, at which the clip's first frame plays. In and out points only gate visibility. */
+  readonly start: number;
+}
+
 export interface Layer {
   readonly id: Id;
   readonly name: string;
@@ -74,6 +89,8 @@ export interface Layer {
   readonly shape?: ShapeContent;
   /** Present on image layers. */
   readonly image?: ImageContent;
+  /** Present on video layers. */
+  readonly video?: VideoContent;
   /** Seconds. The layer is visible for inPoint <= t < outPoint. Defaults: 0 and the composition duration. */
   readonly inPoint?: number;
   readonly outPoint?: number;

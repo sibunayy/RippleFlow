@@ -1,8 +1,9 @@
 import { apply, invert, multiply, scale, translate, type Affine } from "../core/affine";
 import { History, type Command } from "../core/history";
 import { evaluateScene, type SceneItem } from "../core/scene";
-import type { Composition, Id } from "../core/types";
-import { buildImageGeometry, buildShapeGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
+import type { Composition, Id, VideoContent } from "../core/types";
+import type { FrameRef } from "../video/videoLibrary";
+import { buildImageGeometry, buildShapeGeometry, buildVideoGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
 import { TwoFingerGesture } from "../input/twoFingerGesture";
 import { applyWorldDelta, transformLayer } from "./transformEdit";
 import { SelectTool, type ToolContext, type ToolOutput } from "./selectTool";
@@ -115,6 +116,7 @@ export class EditorController {
     const layer = this.document.layers.find((l) => l.id === id);
     if (!layer) return undefined;
     if (layer.image) return buildImageGeometry(layer.image, this.bitmapOf(layer.image.asset));
+    if (layer.video) return buildVideoGeometry(layer.video);
     const shape = layer.shape;
     if (!shape) return undefined;
     let g = this.geometry.get(shape);
@@ -124,6 +126,9 @@ export class EditorController {
     }
     return g;
   }
+
+  /** Current decoded frame of a video layer at composition time `t`. The app sets this; it returns undefined until a frame has decoded. */
+  frameOf: (video: VideoContent, t: number) => FrameRef | undefined = () => undefined;
 
   /** Tell the editor a picture finished loading so the view redraws. */
   notifyImagesChanged(): void {
