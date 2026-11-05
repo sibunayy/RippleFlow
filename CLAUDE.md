@@ -62,7 +62,9 @@ Phase 0 is done (see `docs/phase0-results.md`). Built and merged, container-veri
 - M6 export: offscreen render to H.264 MP4 with share/download.
 - M4 media: image layers (OPFS assets by content hash, downscale to 2048) and video layers (Mediabunny sequential/seek decode, external-texture draw, rotation metadata, in export too). Video layers plays from `video.start`; in/out points only gate visibility.
 
-Not built: SVG import, project list/naming, file open/save, text, audio (video clips export silent), composition size/fps UI, slipping/moving a clip on the timeline.
+Projects: several projects in OPFS (`p-…` ids, `rf.current` in localStorage remembers the open one), project list dialog (new/open/rename/duplicate/delete), single-file `.rippleflow` backup bundle (project + media) in `src/persist/bundle.ts`. Number fields scrub by dragging (`ScrubField`, `ctrl.setPreview`).
+
+Not built: SVG import, text, audio (video clips export silent), composition size/fps UI, slipping/moving a clip on the timeline.
 
 Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.
 

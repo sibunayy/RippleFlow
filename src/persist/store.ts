@@ -4,15 +4,23 @@ export interface ProjectStore {
   /** Replaces the whole file atomically: a crash mid-write leaves the previous version. */
   save(id: string, text: string): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Every stored project file with its last-modified time (ms). */
+  list(): Promise<{ id: string; modified: number }[]>;
 }
 
 export class MemoryStore implements ProjectStore {
   readonly files = new Map<string, string>();
+  private readonly times = new Map<string, number>();
+  private clock = 0;
+  async list() {
+    return [...this.files.keys()].map((id) => ({ id, modified: this.times.get(id) ?? 0 }));
+  }
   async load(id: string) {
     return this.files.get(id) ?? null;
   }
   async save(id: string, text: string) {
     this.files.set(id, text);
+    this.times.set(id, ++this.clock);
   }
   async remove(id: string) {
     this.files.delete(id);
@@ -50,6 +58,18 @@ export class OpfsStore implements ProjectStore {
       await w.abort().catch(() => {});
       throw e;
     }
+  }
+  async list() {
+    const out: { id: string; modified: number }[] = [];
+    try {
+      for await (const [name, h] of (await this.dir(false)) as unknown as AsyncIterable<[string, FileSystemHandle]>) {
+        if (h.kind !== "file" || !name.endsWith(".json")) continue;
+        out.push({ id: name.slice(0, -5), modified: (await (h as FileSystemFileHandle).getFile()).lastModified });
+      }
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === "NotFoundError")) throw e;
+    }
+    return out;
   }
   async remove(id: string) {
     try {

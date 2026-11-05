@@ -37,6 +37,12 @@ export class Autosaver {
     this.o.onState?.("saved");
   }
 
+  /** Stop for good (the project was closed or deleted): no further writes. */
+  stop(): void {
+    this.locked = true;
+    clearTimeout(this.timer);
+  }
+
   touch(doc: Composition): void {
     if (this.locked) return;
     this.latest = doc;

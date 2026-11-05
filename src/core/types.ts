@@ -97,6 +97,8 @@ export interface Layer {
 }
 
 export interface Composition {
+  /** Project name shown in the project list. */
+  readonly name?: string;
   /** Straight RGBA 0..1 behind all layers. Defaults to white. */
   readonly background?: Rgba;
   readonly width: number;

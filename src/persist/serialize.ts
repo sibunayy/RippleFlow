@@ -153,5 +153,6 @@ export function deserialize(text: string): Composition {
     }
   }
   const out: Composition = { width: pos(c.width, "width"), height: pos(c.height, "height"), fps: pos(c.fps, "fps"), duration: pos(c.duration, "duration"), layers };
-  return c.background === undefined ? out : { ...out, background: rgba(c.background, "background") };
+  const named = c.name === undefined ? out : { ...out, name: str(c.name, "name").slice(0, 80) };
+  return c.background === undefined ? named : { ...named, background: rgba(c.background, "background") };
 }
