@@ -7,6 +7,7 @@ import { buildDraws, SceneSync, selectionCorners } from "./sceneDraws";
 import { Autosaver, loadProject, type SaveState } from "../persist/autosave";
 import { blankProject, duplicateProject, LEGACY_ID, listProjects, newProjectId, recallCurrent, rememberCurrent, untitledName } from "../persist/projects";
 import { unpackBundle } from "../persist/bundle";
+import { CompSettings } from "./CompSettings";
 import { ProjectsDialog } from "./ProjectsDialog";
 import { MemoryStore, OpfsStore, opfsAvailable, type ProjectStore } from "../persist/store";
 import { ImageLibrary } from "./images";
@@ -41,6 +42,7 @@ export function Editor() {
   const [notice, setNotice] = createSignal<string | null>(null);
   const [exporting, setExporting] = createSignal(false);
   const [projectsOpen, setProjectsOpen] = createSignal(false);
+  const [compOpen, setCompOpen] = createSignal(false);
   const [styleOpen, setStyleOpen] = createSignal(true);
   const [projectId, setProjectId] = createSignal(LEGACY_ID);
   const [update, setUpdate] = createSignal<(() => void) | null>(null);
@@ -312,6 +314,7 @@ export function Editor() {
     <div class="app">
       <header class="bar">
         <button class="proj" title="Projects" onClick={() => { setPlaying(false); setProjectsOpen(true); }}>{(tick(), ctrl.document.name ?? "Project")} ▾</button>
+        <button title="Composition size, frame rate, length" onClick={() => { setPlaying(false); setCompOpen(true); }}>Comp</button>
         <button onClick={() => add("rect")}>Rect</button>
         <button onClick={() => add("ellipse")}>Ellipse</button>
         <button onClick={() => add("star")}>Star</button>
@@ -449,6 +452,25 @@ export function Editor() {
       </div>
       <Style ctrl={ctrl} tick={tick} notify={setNotice} open={styleOpen} />
       </div>
+      <Show when={compOpen()}>
+        <CompSettings
+          comp={() => (tick(), ctrl.document)}
+          run={(cmd) => {
+            try {
+              const { width, height } = ctrl.document;
+              ctrl.execute(cmd);
+              if (ctrl.document.width !== width || ctrl.document.height !== height) {
+                const r = stage.getBoundingClientRect();
+                ctrl.fitView(r.width, r.height);
+              }
+              bump();
+            } catch (e) {
+              setNotice(e instanceof Error ? e.message : String(e));
+            }
+          }}
+          onClose={() => setCompOpen(false)}
+        />
+      </Show>
       <Show when={projectsOpen()}>
         <ProjectsDialog
           store={store}

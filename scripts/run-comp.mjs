@@ -1,0 +1,23 @@
+// Usage: node scripts/run-comp.mjs "<app url>?debug&noloop"
+import { createRequire } from "node:module";
+const { chromium } = createRequire(import.meta.url)("playwright");
+const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
+const errors = []; page.on("pageerror", (e) => errors.push(e.message));
+await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300);
+const doc = () => page.evaluate(() => { const d = window.__rf.ctrl.document; return [d.width, d.height, d.fps, d.duration, d.background]; });
+const view = () => page.evaluate(() => [...window.__rf.ctrl.view]);
+const v0 = await view();
+await page.getByRole("button", { name: "Comp", exact: true }).click();
+await page.getByRole("button", { name: /9:16/ }).click();
+await page.getByRole("button", { name: "60 fps" }).click();
+await page.getByLabel("Length (s)").fill("4"); await page.getByLabel("Length (s)").press("Enter");
+await page.getByLabel("Background colour").fill("#112233");
+console.log("doc:", JSON.stringify(await doc()));
+console.log("view refit:", JSON.stringify(v0) !== JSON.stringify(await view()));
+await page.getByLabel("Width").fill("99999"); await page.getByLabel("Width").press("Enter");
+console.log("clamped width:", (await doc())[0]);
+await page.evaluate(() => window.__rf.ctrl.undo());
+await page.getByText("Done", { exact: true }).click();
+console.log("errors:", errors.length ? errors : "none");
+await browser.close();
