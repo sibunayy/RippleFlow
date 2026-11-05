@@ -1,5 +1,6 @@
 import { tessellateFill } from "../geometry/fill";
-import { flatten, type Subpath } from "../geometry/path";
+import { localTolerance } from "../geometry/lod";
+import { flatten } from "../geometry/path";
 import { tessellateStroke, type StrokeStyle } from "../geometry/stroke";
 import { parseSvgPath } from "../geometry/svgPath";
 import type { Draw } from "../render/meshRenderer";
@@ -34,18 +35,22 @@ const SHAPES: Array<{
   },
 ];
 
-function scaled(subs: Subpath[], s: number): Subpath[] {
-  return subs.map((sp) => ({ closed: sp.closed, points: sp.points.map((v) => v * s) }));
-}
+/** Size of the logo's local coordinate space. */
+export const LOGO_SIZE = 512;
 
-export function buildLogo(pixelScale: number): Draw[] {
+/**
+ * Tessellate the logo once in its own 512x512 space. `maxScale` is the largest
+ * local-to-pixel scale it will be drawn at; it sets the flattening tolerance.
+ * Position, rotation and scale are applied later through each draw's transform.
+ */
+export function buildLogo(maxScale: number): Draw[] {
+  const tol = localTolerance(maxScale);
   const draws: Draw[] = [];
   for (const sh of SHAPES) {
-    const subs = flatten(parseSvgPath(sh.d), 0.05 / pixelScale);
-    if (sh.fill) draws.push({ mesh: tessellateFill(scaled(subs, pixelScale)), color: sh.fill });
+    const subs = flatten(parseSvgPath(sh.d), tol);
+    if (sh.fill) draws.push({ mesh: tessellateFill(subs), color: sh.fill });
     if (sh.stroke) {
-      const style = { ...sh.stroke.style, width: sh.stroke.style.width * pixelScale, tolerance: 0.05 };
-      draws.push({ mesh: tessellateStroke(scaled(subs, pixelScale), style), color: sh.stroke.color });
+      draws.push({ mesh: tessellateStroke(subs, { ...sh.stroke.style, tolerance: tol }), color: sh.stroke.color });
     }
   }
   return draws;
