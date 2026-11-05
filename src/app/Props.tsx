@@ -4,6 +4,7 @@ import { applyPreset, PRESETS } from "../core/presets";
 import type { Layer } from "../core/types";
 import type { EditorController } from "../editor/controller";
 import { propValue, setPropValue, type EditableProp } from "../editor/transformEdit";
+import { ALIGN_MODES } from "../editor/align";
 import { ScrubField } from "./ScrubField";
 
 interface Field {
@@ -46,6 +47,15 @@ export function Props(props: { ctrl: EditorController; tick: () => number }) {
               </For>
             </select>
           </label>
+          <div class="anim-presets align" role="group" aria-label="Align to composition">
+            <For each={ALIGN_MODES}>
+              {(a) => (
+                <button title={a.title} aria-label={a.title} onClick={() => props.ctrl.alignSelected(a.mode)}>
+                  {a.label}
+                </button>
+              )}
+            </For>
+          </div>
           <div class="anim-presets" role="group" aria-label="Animation presets">
             <For each={PRESETS}>
               {(p) => (

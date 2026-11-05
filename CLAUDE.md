@@ -90,6 +90,8 @@ SVG import: toolbar SVG imports a file as editable shapes (`src/geometry/svgImpo
 
 Animation presets: Props panel buttons (Fade/Pop/Slide up/Slide in/Spin in, and Fade/Pop/Slide down/Spin out) write keyframes relative to the layer's settled values: in at the layer in-point, out at its out-point (`src/core/presets.ts`, `applyPreset`; re-applying replaces the keys in that span). `scripts/run-presets.mjs`.
 
+Align: six buttons in the Props panel align the selected layer to the composition edges/centres (`src/editor/align.ts`, controller `alignSelected`). A layer with no shape of its own (an SVG group, a null) aligns the union box of everything parented under it. Uses the box at the playhead and respects auto-key. `scripts/run-align.mjs`.
+
 Not built: audio (video clips export silent), slipping a clip (changing which part plays without moving it).
 
 Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.

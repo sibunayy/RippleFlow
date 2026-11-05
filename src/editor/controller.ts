@@ -19,6 +19,7 @@ import { deleteNode, isSmooth, nodesToPath, parseNodes, setCorner, setSmooth, tr
 import { NodeTool, type NodeContext, type NodeOutput, type NodeSel } from "./nodeTool";
 import { SelectTool, type ToolContext, type ToolOutput } from "./selectTool";
 import type { Bounds } from "./hitTest";
+import { alignDelta, unionBox, worldBox, type AlignMode } from "./align";
 
 export interface PointerInput {
   readonly id: number;
@@ -415,6 +416,32 @@ export class EditorController {
 
   /** Resolves a loaded picture by asset id. The app sets this; until a picture loads it returns undefined. */
   bitmapOf: (asset: string) => ImageBitmap | undefined = () => undefined;
+
+  /**
+   * Align the selected layer (or, for a layer with no shape of its own such as an SVG group, everything parented
+   * under it) to the composition. Moves the selected layer, so its children follow.
+   */
+  alignSelected(mode: AlignMode): void {
+    const id = this.selection;
+    if (id === null) return;
+    const layers = this.document.layers;
+    const family = new Set<Id>([id]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const l of layers) if (l.parent !== undefined && family.has(l.parent) && !family.has(l.id)) { family.add(l.id); grew = true; }
+    }
+    const items = evaluateScene(this.document, this.time);
+    const boxes: Bounds[] = [];
+    for (const it of items) {
+      const b = family.has(it.id) ? this.geometryOf(it.id)?.bounds : undefined;
+      if (b) boxes.push(worldBox(b, it.matrix));
+    }
+    const box = unionBox(boxes);
+    if (!box) return;
+    const [dx, dy] = alignDelta(box, mode, this.document.width, this.document.height);
+    if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return;
+    this.execute(transformLayer(id, translate(dx, dy), this.time, this.autoKey, "Align layer"));
+  }
 
   /** Local-space geometry for a layer. Shapes are built once per shape object; image layers are a cheap shared rectangle. */
   geometryOf(id: Id): ShapeGeometry | undefined {
