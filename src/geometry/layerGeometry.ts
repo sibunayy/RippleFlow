@@ -6,6 +6,7 @@ import { flatten } from "./path";
 import type { Mesh } from "./mesh";
 import { rectMesh } from "./rect";
 import { tessellateStroke } from "./stroke";
+import { trimSubpaths } from "./trim";
 import { parseSvgPath } from "./svgPath";
 import { fontLoaded, layoutText, type LaidOutUnit } from "../text/glyphs";
 
@@ -24,6 +25,8 @@ export interface ShapePart {
    * scaled space; draw it with the layer matrix divided by (sx, sy).
    */
   readonly strokeAt?: (sx: number, sy: number) => Mesh;
+  /** Stroke parts only: the stroke of just the stretch between two fractions of its length (trim paths), for a layer of world scale (sx, sy) as in `strokeAt`. */
+  readonly trimAt?: (start: number, end: number, sx: number, sy: number) => Mesh;
   /** Picture with puppet pins: the mesh is rebuilt from the pins each frame (size of the picture in pixels). */
   readonly warp?: { readonly w: number; readonly h: number };
   /** Text layers with an animator: which character/word/line this part belongs to, and the point it turns and scales about. */
@@ -75,6 +78,25 @@ export function buildShapeGeometry(shape: ShapeContent, tolerance = 0.1): ShapeG
         }
         return m;
       },
+      ...(shape.trim
+        ? {
+            trimAt: (() => {
+              const last = new Map<string, Mesh>();
+              return (start: number, end: number, sx: number, sy: number): Mesh => {
+                const key = `${start.toFixed(4)},${end.toFixed(4)},${sx.toFixed(3)},${sy.toFixed(3)}`;
+                let m = last.get(key);
+                if (!m) {
+                  const k = Math.sqrt(sx * sy);
+                  const scaled = subpaths.map((sp) => ({ ...sp, points: sp.points.map((v, i) => v * (i % 2 ? sy : sx)) }));
+                  m = tessellateStroke(trimSubpaths(scaled, start, end), { width: s.width * k, ...strokeOpts, tolerance: tolerance * Math.max(sx, sy) });
+                  if (last.size >= 8) last.delete(last.keys().next().value!);
+                  last.set(key, m);
+                }
+                return m;
+              };
+            })(),
+          }
+        : {}),
     });
   }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
