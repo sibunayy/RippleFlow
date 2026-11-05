@@ -12,6 +12,35 @@ const replaceLayer = (comp: Composition, layer: Layer): Composition => ({
   layers: comp.layers.map((l) => (l.id === layer.id ? layer : l)),
 });
 
+/**
+ * Copy a layer just above the original under a new id. Keyframe ids are renamed so no two tracks share one;
+ * the copy keeps its parent, effects, masks and matte.
+ */
+export function duplicateLayer(id: Id, newId: Id): Command {
+  return {
+    label: "Duplicate layer",
+    apply(comp) {
+      if (comp.layers.some((l) => l.id === newId)) throw new Error(`Layer ${newId} already exists`);
+      const src = find(comp, id);
+      const track = (t: Track): Track => ({ keys: t.keys.map((k) => ({ ...k, id: `${k.id}~${newId}` })) });
+      const copy: Layer = {
+        ...src,
+        id: newId,
+        name: `${src.name} copy`,
+        transform: Object.fromEntries(Object.entries(src.transform).map(([k, t]) => [k, track(t as Track)])) as unknown as Layer["transform"],
+        ...(src.effects ? { effects: src.effects.map((e) => ({ ...e, id: `${e.id}~${newId}`, values: Object.fromEntries(Object.entries(e.values).map(([k, t]) => [k, track(t)])) })) } : {}),
+        ...(src.masks ? { masks: src.masks.map((m) => ({ ...m, id: `${m.id}~${newId}` })) } : {}),
+        ...(src.image?.pins ? { image: { ...src.image, pins: src.image.pins.map((p) => ({ ...p, id: `${p.id}~${newId}`, dx: track(p.dx), dy: track(p.dy) })) } } : {}),
+      };
+      const at = comp.layers.findIndex((l) => l.id === id) + 1;
+      return { ...comp, layers: [...comp.layers.slice(0, at), copy, ...comp.layers.slice(at)] };
+    },
+  };
+}
+
+export const renameLayer = (id: Id, name: string): Command =>
+  editLayer(id, "Rename layer", (l) => (l.name === name || name.trim() === "" ? l : { ...l, name: name.trim() }));
+
 export type TransformProp = keyof Transform;
 
 /** Insert a layer at `index` (default: on top). */

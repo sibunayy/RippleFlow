@@ -1,5 +1,6 @@
 import { createSignal, For, Index, Show } from "solid-js";
-import { moveLayer, setInOut } from "../core/commands";
+import { duplicateLayer, moveLayer, renameLayer, setHidden, setInOut } from "../core/commands";
+import { nextLayerNumber } from "./shapes";
 import type { EditorController } from "../editor/controller";
 import { deleteKeys, isAnimated, keyColumns, moveKeys, snapToFrame, type KeyColumn } from "../editor/keyframeEdit";
 
@@ -97,6 +98,24 @@ export function Timeline(props: {
     if (c) ctrl.execute(deleteKeys(c.refs));
     setPicked(null);
   };
+  const dup = () => {
+    const id = ctrl.selection;
+    if (!id) return;
+    const newId = `layer-${nextLayerNumber(ctrl.document.layers)}`;
+    ctrl.execute(duplicateLayer(id, newId));
+    ctrl.setSelection(newId);
+  };
+  const rename = () => {
+    const l = ctrl.document.layers.find((x) => x.id === ctrl.selection);
+    const name = l ? window.prompt("Layer name", l.name) : null;
+    if (l && name) ctrl.execute(renameLayer(l.id, name));
+  };
+  const depth = (id: string): number => {
+    const byId = new Map(ctrl.document.layers.map((l) => [l.id, l]));
+    let n = 0;
+    for (let cur = byId.get(id)?.parent; cur !== undefined && n < 8; cur = byId.get(cur)?.parent) n++;
+    return n;
+  };
   const shift = (dir: 1 | -1) => {
     const id = ctrl.selection;
     if (!id) return;
@@ -109,6 +128,8 @@ export function Timeline(props: {
       <div class="tl-tools">
         <button onClick={() => shift(1)} disabled={(props.tick(), ctrl.selection === null)}>Raise</button>
         <button onClick={() => shift(-1)} disabled={(props.tick(), ctrl.selection === null)}>Lower</button>
+        <button onClick={dup} disabled={(props.tick(), ctrl.selection === null)}>Duplicate</button>
+        <button onClick={rename} disabled={(props.tick(), ctrl.selection === null)}>Rename</button>
         <button onClick={delKey} disabled={picked() === null}>Delete key</button>
         <span class="hint">Drag a diamond to retime. Tap the ruler to scrub.</span>
       </div>
@@ -128,7 +149,19 @@ export function Timeline(props: {
         <For each={layers()}>
           {(layer) => (
             <div class="tl-row" classList={{ on: (props.tick(), ctrl.selection === layer.id) }}>
-              <div class="tl-label" onClick={() => ctrl.setSelection(layer.id)}>
+              <div class="tl-label" onClick={() => ctrl.setSelection(layer.id)} style={{ "padding-left": `${12 + 12 * (props.tick(), depth(layer.id))}px` }}>
+                <button
+                  class="eye"
+                  classList={{ off: (props.tick(), layer.hidden === true) }}
+                  aria-label={layer.hidden ? "Show layer" : "Hide layer"}
+                  aria-pressed={layer.hidden !== true}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    ctrl.execute(setHidden(layer.id, layer.hidden !== true));
+                  }}
+                >
+                  {layer.hidden ? "◌" : "●"}
+                </button>
                 {layer.name}
               </div>
               <div class="tl-track">

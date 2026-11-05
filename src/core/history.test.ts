@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLayer, moveLayer, removeKeyframe, removeLayer, setInOut, setKeyframe, setParent } from "./commands";
+import { addLayer, duplicateLayer, renameLayer, moveLayer, removeKeyframe, removeLayer, setInOut, setKeyframe, setParent } from "./commands";
 import { History } from "./history";
 import type { Composition, Layer, Track, Transform } from "./types";
 
@@ -118,5 +118,24 @@ describe("commands", () => {
   });
   it("commands reject unknown layers", () => {
     expect(() => setKeyframe("nope", "x", { id: "k", t: 0, value: 1 }).apply(empty)).toThrow(/Unknown layer/);
+  });
+});
+
+describe("duplicateLayer and renameLayer", () => {
+  const withKeys = (id: string): Layer => ({ ...layer(id), transform: { ...tf(), x: { keys: [{ id: "k1", t: 0, value: 1 }, { id: "k2", t: 1, value: 2 }] } } });
+  it("copies above the original with fresh keyframe ids", () => {
+    const c: Composition = { width: 100, height: 100, fps: 30, duration: 1, layers: [withKeys("a"), layer("b")] };
+    const out = duplicateLayer("a", "a2").apply(c);
+    expect(out.layers.map((l) => l.id)).toEqual(["a", "a2", "b"]);
+    expect(out.layers[1]!.name).toBe("a copy");
+    const ids = [...out.layers[0]!.transform.x.keys, ...out.layers[1]!.transform.x.keys].map((k) => k.id);
+    expect(new Set(ids).size).toBe(4);
+    expect(out.layers[1]!.transform.x.keys.map((k) => k.value)).toEqual([1, 2]);
+  });
+  it("rejects an id that is taken; rename ignores blanks", () => {
+    const c: Composition = { width: 100, height: 100, fps: 30, duration: 1, layers: [layer("a"), layer("b")] };
+    expect(() => duplicateLayer("a", "b").apply(c)).toThrow();
+    expect(renameLayer("a", "  ").apply(c)).toBe(c);
+    expect(renameLayer("a", " Hero ").apply(c).layers[0]!.name).toBe("Hero");
   });
 });

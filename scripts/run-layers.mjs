@@ -1,0 +1,30 @@
+// Usage: node scripts/run-layers.mjs "<app url>?debug&noloop"
+// Timeline layer controls: duplicate, rename, hide/show, indent under a parent.
+import { createRequire } from "node:module";
+const { chromium } = createRequire(import.meta.url)("playwright");
+const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
+const errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+page.on("dialog", (d) => d.accept("Hero"));
+await page.goto(process.argv[2]);
+await page.waitForFunction(() => window.__rf);
+await page.waitForTimeout(500);
+const check = (n, ok, extra = "") => console.log(ok ? "PASS" : "FAIL", n, extra);
+const layers = () => page.evaluate(() => window.__rf.ctrl.document.layers.map((l) => ({ id: l.id, name: l.name, hidden: !!l.hidden, parent: l.parent })));
+await page.getByText("Rect", { exact: true }).click();
+await page.getByRole("button", { name: "Duplicate" }).click();
+let ls = await layers();
+check("duplicate adds a copy and selects it", ls.length === 2 && ls[1].name.endsWith("copy") && (await page.evaluate(() => window.__rf.ctrl.selection)) === ls[1].id);
+await page.getByRole("button", { name: "Rename" }).click();
+check("rename via prompt", (await layers())[1].name === "Hero");
+await page.getByRole("button", { name: "Hide layer" }).first().click();
+check("eye hides the layer", (await layers()).some((l) => l.hidden));
+const hiddenScene = await page.evaluate(() => window.__rf.ctrl.scene().length);
+check("hidden layer leaves the scene", hiddenScene === 1);
+await page.getByRole("button", { name: "Show layer" }).click();
+check("eye shows it again", (await layers()).every((l) => !l.hidden));
+await page.getByText("Undo", { exact: true }).click();
+check("undo is one step", (await layers()).some((l) => l.hidden));
+console.log("errors:", errors.length ? errors : "none");
+await browser.close();
