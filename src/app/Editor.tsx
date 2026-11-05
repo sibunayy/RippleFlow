@@ -4,6 +4,7 @@ import { EditorController, type PointerInput } from "../editor/controller";
 import { MeshRenderer } from "../render/meshRenderer";
 import { buildDraws, SceneSync, selectionCorners } from "./sceneDraws";
 import { addShape, type ShapeKind } from "./shapes";
+import { Props } from "./Props";
 import { Timeline } from "./Timeline";
 
 declare global {
@@ -152,6 +153,7 @@ export function Editor() {
           <p class="error">WebGPU unavailable: {error()}</p>
         </Show>
       </div>
+      <Props ctrl={ctrl} tick={tick} />
       <Timeline ctrl={ctrl} tick={tick} />
       <footer class="bar">
         <button onClick={() => setPlaying(!playing())}>{playing() ? "Pause" : "Play"}</button>

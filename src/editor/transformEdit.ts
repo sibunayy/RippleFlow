@@ -73,6 +73,28 @@ export function applyWorldDelta(comp: Composition, layerId: Id, delta: Affine, t
   return { ...comp, layers: comp.layers.map((l) => (l.id === layerId ? updated : l)) };
 }
 
+export type EditableProp = Prop | "opacity";
+const PROP_DEFAULTS: Record<EditableProp, number> = { ...DEFAULTS, opacity: 1 };
+
+/** Value of an editable property at time `t`. */
+export const propValue = (layer: Layer, prop: EditableProp, t: number): number => evalTrack(layer.transform[prop], t, PROP_DEFAULTS[prop]);
+
+/** Set one property to `value` at time `t` (keyframed when animated or auto-key is on). */
+export function setPropValue(layerId: Id, prop: EditableProp, value: number, t: number, autoKey: boolean): Command {
+  return {
+    label: `Set ${prop}`,
+    apply(comp) {
+      const layer = comp.layers.find((l) => l.id === layerId);
+      if (!layer) throw new Error(`Unknown layer ${layerId}`);
+      const v = prop === "opacity" ? Math.min(1, Math.max(0, value)) : value;
+      if (!Number.isFinite(v)) return comp;
+      if (Math.abs(propValue(layer, prop, t) - v) <= EPS) return comp;
+      const transform: Transform = { ...layer.transform, [prop]: writeTrack(layer.transform[prop], t, v, autoKey, `${layerId}.${prop}@${t}`) };
+      return { ...comp, layers: comp.layers.map((l) => (l.id === layerId ? { ...layer, transform } : l)) };
+    },
+  };
+}
+
 export function transformLayer(layerId: Id, delta: Affine, t: number, autoKey: boolean, label = "Transform layer"): Command {
   return { label, apply: (comp) => applyWorldDelta(comp, layerId, delta, t, autoKey) };
 }
