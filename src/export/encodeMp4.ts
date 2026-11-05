@@ -8,6 +8,12 @@ export interface ExportConfig {
   /** Bits per second. */
   bitrate: number;
   keyframeEverySec?: number;
+  /**
+   * Colour description to write into the file, replacing whatever the encoder reports.
+   * Safari's encoder reports full range for data it encoded as limited range, which
+   * makes players show white as light grey, so the exporter states the truth itself.
+   */
+  colorSpace?: VideoColorSpaceInit;
   /** Abort the export between frames; the promise rejects with the signal's reason. */
   signal?: AbortSignal;
   /** Max frames queued inside the encoder before we wait. */
@@ -96,7 +102,10 @@ export async function exportMp4(
 
   let encodeError: unknown = null;
   const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    output: (chunk, meta) => {
+      const cs = cfg.colorSpace;
+      muxer.addVideoChunk(chunk, cs && meta?.decoderConfig ? { ...meta, decoderConfig: { ...meta.decoderConfig, colorSpace: cs } } : meta);
+    },
     error: (e) => {
       encodeError = e;
     },

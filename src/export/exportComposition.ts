@@ -23,6 +23,9 @@ export const PRESETS: readonly ExportPreset[] = [
   { id: "1080p60", label: "1080p · 60 fps", height: 1080, fps: 60, bitrate: 12_000_000 },
 ];
 
+/** What the pixels we hand the encoder are: BT.709 primaries, transfer and matrix, limited (16..235) range. */
+export const BT709_LIMITED: VideoColorSpaceInit = { primaries: "bt709", transfer: "bt709", matrix: "bt709", fullRange: false };
+
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2); // H.264 4:2:0 needs even dimensions
 
 /** Output pixel size for a preset, keeping the composition's aspect ratio. */
@@ -51,7 +54,7 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
   canvas.width = width;
   canvas.height = height;
   const renderer = await MeshRenderer.create(canvas);
-  const readback = renderer.createReadback();
+  const readback = renderer.createNv12Readback();
   try {
     const bg = comp.background ?? DEFAULT_BACKGROUND;
     renderer.clearColor = { r: bg[0], g: bg[1], b: bg[2], a: 1 };
@@ -61,7 +64,6 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
     const videoOf = new Map(comp.layers.filter((l) => l.video).map((l) => [l.id, l.video!]));
     const toDevice = scale(width / comp.width, height / comp.height);
     const sync = new SceneSync();
-    const bgra = renderer.format === "bgra8unorm";
 
     return await exportMp4(
       {
@@ -71,6 +73,7 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
         durationSec: comp.duration,
         bitrate: opts.preset.bitrate,
         keyframeEverySec: 1, // short GOPs keep the file quick to scrub in other apps
+        colorSpace: BT709_LIMITED,
         signal: opts.signal,
       },
       async (index, timestamp, duration) => {
@@ -88,12 +91,16 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
         sync.sync(renderer, draws);
         const data = await readback.read();
         return new VideoFrame(data, {
-          format: bgra ? "BGRA" : "RGBA",
+          format: "NV12",
           codedWidth: width,
           codedHeight: height,
           timestamp,
           duration,
-          layout: [{ offset: 0, stride: readback.bytesPerRow }],
+          colorSpace: BT709_LIMITED,
+          layout: [
+            { offset: 0, stride: readback.stride },
+            { offset: readback.stride * height, stride: readback.stride },
+          ],
         });
       },
       opts.onProgress,

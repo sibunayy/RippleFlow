@@ -1,5 +1,6 @@
 import { IDENTITY, type Affine } from "../core/affine";
 import type { Mesh } from "../geometry/mesh";
+import { Nv12Readback } from "./nv12Readback";
 
 export interface Draw {
   /** Vertices in the draw's local coordinates. */
@@ -334,6 +335,11 @@ export class MeshRenderer {
     this.textures.clear();
     this.msaa?.destroy();
     this.gpu.device.destroy();
+  }
+
+  /** Offscreen render plus GPU conversion to BT.709 limited-range NV12 (see Nv12Readback). */
+  createNv12Readback(): Nv12Readback {
+    return new Nv12Readback(this.gpu.device, this.gpu.format, this.canvas.width, this.canvas.height, (enc, tex, w, h) => this.encode(enc, tex, w, h));
   }
 
   createReadback(): FrameReadback {
