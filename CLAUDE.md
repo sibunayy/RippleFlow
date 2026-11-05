@@ -78,6 +78,8 @@ Text: toolbar Text adds a text layer (a shape layer plus `Layer.text`; `shape.pa
 
 Puppet pins (mesh warp) on image layers: toolbar Pins, tap to pin, drag to pull (auto-key records); `ImageContent.pins` with keyframable dx/dy, `src/geometry/warp.ts` (24x24 grid, inverse-distance blend), `SceneItem.pins`, warped mesh rebuilt per frame and updated in place (`Mesh.key`, `SceneSync` + `MeshRenderer.setMesh`). Picture/video draws now use a (x,y,u,v) vertex buffer (`Mesh.uvs` optional). Container-verified for images (`scripts/run-pins.mjs`); the video external-texture path with the new vertex layout is NOT verified (container GPU cannot). Not built: pin stiffness/rigid regions, video warp, pin on text/shapes.
 
+Timeline layer controls: Duplicate (fresh keyframe/effect/mask ids), Rename (window.prompt), eye toggle, indent by parent depth, Raise/Lower. `scripts/run-layers.mjs`. Not built: pre-comps (nested compositions), drag-reorder.
+
 Null layers and parenting: toolbar Null adds an empty transform layer; Props "Parent" picker parents any layer to another (cycles not offered; transform only, opacity is not inherited). Script `scripts/run-parent.mjs`. No group/pre-comp yet.
 
 Not built: SVG import, text, audio (video clips export silent), composition size/fps UI, slipping/moving a clip on the timeline.

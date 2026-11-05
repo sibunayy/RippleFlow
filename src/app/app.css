@@ -25,6 +25,8 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .tl-row { display: flex; height: 44px; border-top: 1px solid #2c2c34; }
 .tl-row.on { background: #2a3445; }
 .tl-label { width: 132px; flex: none; padding: 0 12px; line-height: 44px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; }
+.eye { width: 28px; height: 28px; margin-right: 4px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; font-size: 14px; vertical-align: middle; }
+.eye.off { opacity: 0.4; }
 .tl-track { position: relative; flex: 1; margin-right: 16px; touch-action: none; }
 .ruler { background: #26262e; }
 .tick { position: absolute; top: 0; padding-left: 4px; font-size: 12px; line-height: 44px; border-left: 1px solid #44444e; height: 100%; opacity: 0.7; pointer-events: none; }
