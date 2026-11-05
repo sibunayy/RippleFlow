@@ -44,7 +44,7 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .scrub.editing { cursor: text; }
 .scrub.editing input { pointer-events: auto; outline: 2px solid #6a8cff; }
 .scrub input { width: 84px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
-.bar-range { position: absolute; top: 8px; bottom: 8px; background: #3b4a66; border-radius: 6px; }
+.bar-range { touch-action: none; cursor: grab; position: absolute; top: 8px; bottom: 8px; background: #3b4a66; border-radius: 6px; }
 .trim { position: absolute; top: -4px; bottom: -4px; width: 22px; touch-action: none; }
 .trim::after { content: ""; position: absolute; top: 4px; bottom: 4px; width: 6px; background: #8fb4ff; border-radius: 3px; }
 .trim.in { left: -11px; } .trim.in::after { left: 8px; }

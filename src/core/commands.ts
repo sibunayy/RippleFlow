@@ -212,6 +212,39 @@ export function setInOut(id: Id, inPoint: number, outPoint: number): Command {
   };
 }
 
+function shiftKeys(v: unknown, dt: number): unknown {
+  if (Array.isArray(v)) return v.map((x) => shiftKeys(x, dt));
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(o)) {
+      out[k] = k === "keys" && Array.isArray(o[k]) ? (o[k] as { t: number }[]).map((key) => ({ ...key, t: key.t + dt })) : shiftKeys(o[k], dt);
+    }
+    return out;
+  }
+  return v;
+}
+
+/**
+ * Slide a whole layer along the timeline by `dt` seconds: visibility range, every keyframe
+ * (transform, effects, pins) and a video's start move together. The range is clamped to the composition.
+ */
+export function moveLayerInTime(id: Id, dt: number): Command {
+  return {
+    label: "Move layer in time",
+    apply(comp) {
+      const layer = find(comp, id);
+      const a = layer.inPoint ?? 0;
+      const b = layer.outPoint ?? comp.duration;
+      const d = Math.min(Math.max(dt, -a), comp.duration - b);
+      if (Math.abs(d) < 1e-9) return comp;
+      const moved = shiftKeys(layer, d) as Layer;
+      const next: Layer = { ...moved, inPoint: a + d, outPoint: b + d };
+      return replaceLayer(comp, layer.video ? { ...next, video: { ...layer.video, start: layer.video.start + d } } : next);
+    },
+  };
+}
+
 /** Replace a layer with `edit(layer)` (return the same object for no change). */
 export function editLayer(id: Id, label: string, edit: (layer: Layer) => Layer): Command {
   return {
