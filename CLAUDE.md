@@ -53,4 +53,16 @@ npm run build
 
 ## Status
 
-Phase 0 spikes: tessellation and export verified on the iPad. Video-into-WebGPU (`/video.html`) and Pencil/touch (`/input.html`) are deployed and waiting for the user's iPad results. See `docs/phase0-results.md`.
+Phase 0 is done (see `docs/phase0-results.md`). Built and merged, container-verified by driving the real app (`scripts/run-*.mjs`, offscreen readback, ffmpeg on exported files):
+
+- M1 editor shell: pen/mouse select, move, scale, rotate; touch pans/zooms/rotates the view; undo/redo.
+- M2 timeline: layer rows, keyframe diamonds (retime, delete), trim bars, numeric properties, auto-key.
+- M3 easing editor: bezier handles and presets per keyframe segment.
+- M5 persistence and PWA: validated versioned format, OPFS autosave, offline service worker with update prompt.
+- M6 export: offscreen render to H.264 MP4 with share/download.
+
+Not built: M4 media (images, video layers, SVG import), project list/naming, file open/save, text, audio.
+
+Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.
+
+Container gotchas: the software GPU cannot read back a buffer while a canvas is being presented, so test pages use `?debug&noloop` and the `window.__rf` hook (no canvas present, manual frames).

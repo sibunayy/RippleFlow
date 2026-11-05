@@ -60,17 +60,19 @@ Composition (immutable)  --evaluateScene(t)-->  SceneItem[] (matrix, opacity, ki
 
 ## Milestones
 
+Status: ✅ built and container-verified, iPad feel still to be confirmed by the user; ◐ core built, polish (templates, onboarding) not started; M4 not started.
+
 Each milestone ends with something you can try on the iPad. "Container" means I
 can verify it myself; "iPad" means only your device can.
 
 | # | Milestone | Size | Exit criteria | Verified by |
 |---|---|---|---|---|
-| M1 | **Editor shell**: Solid UI, canvas viewport (two-finger pan/zoom/rotate), tool bar, pen draws shapes, select and move layers with handles, wired to History | L | Draw, select, move, undo on the iPad without UI glitches | container logic + iPad feel |
-| M2 | **Timeline**: layer stack, scrub, play, add and move keyframes, trim layers, touch-sized controls | L | Animate a shape with 3 keyframes and play it back at 60 fps | iPad |
-| M3 | **Graph editor**: bezier handles per keyframe segment, presets | M | Edit an ease with the Pencil and see the motion change | container math + iPad feel |
+| M1 ✅ | **Editor shell**: Solid UI, canvas viewport (two-finger pan/zoom/rotate), tool bar, pen draws shapes, select and move layers with handles, wired to History | L | Draw, select, move, undo on the iPad without UI glitches | container logic + iPad feel |
+| M2 ✅ | **Timeline**: layer stack, scrub, play, add and move keyframes, trim layers, touch-sized controls | L | Animate a shape with 3 keyframes and play it back at 60 fps | iPad |
+| M3 ✅ | **Graph editor**: bezier handles per keyframe segment, presets | M | Edit an ease with the Pencil and see the motion change | container math + iPad feel |
 | M4 | **Media**: SVG import, images, video layers (Mediabunny demux, `importExternalTexture`, frame cache) | L | Import a phone clip, scrub and play it, move and scale it as a layer | iPad |
-| M5 | **Persistence and PWA**: project format, autosave to OPFS/IndexedDB, `storage.persist()`, export/import bundle, manifest and offline cache | M | Close and reopen without loss; work offline from the home screen | iPad (Safari) |
-| M6 | **Export and polish**: export UI, presets, progress and cancel, error recovery, a few templates, onboarding | M | Export a real project to a file that plays in Photos | iPad |
+| M5 ✅ | **Persistence and PWA**: project format, autosave to OPFS/IndexedDB, `storage.persist()`, export/import bundle, manifest and offline cache | M | Close and reopen without loss; work offline from the home screen | iPad (Safari) |
+| M6 ◐ | **Export and polish**: export UI, presets, progress and cancel, error recovery, a few templates, onboarding | M | Export a real project to a file that plays in Photos | iPad |
 
 Order is deliberate: the editor (M1, M2) is what makes this a product and
 everything else hangs off it; media (M4) comes after the model is stable.
