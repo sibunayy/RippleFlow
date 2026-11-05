@@ -84,7 +84,9 @@ Null layers and parenting: toolbar Null adds an empty transform layer; Props "Pa
 
 Composition settings: toolbar Comp opens `src/app/CompSettings.tsx` (size presets 16:9/9:16/1:1/4:5, custom W/H up to 4096, fps, length, background; `setCanvas`/`setBackground` in commands; view refits on size change). `scripts/run-comp.mjs`. Layers are not rescaled when the size changes.
 
-Not built: SVG import, audio (video clips export silent), slipping/moving a clip on the timeline.
+Clip move: drag a layer's bar body on the timeline (`moveLayerInTime`: range, all keyframes and video start shift together, clamped to the composition; `scripts/run-slide.mjs`).
+
+Not built: SVG import, audio (video clips export silent), slipping a clip (changing which part plays without moving it).
 
 Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.
 

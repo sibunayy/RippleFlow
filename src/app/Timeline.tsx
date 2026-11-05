@@ -1,5 +1,5 @@
 import { createSignal, For, Index, Show } from "solid-js";
-import { duplicateLayer, moveLayer, renameLayer, setHidden, setInOut } from "../core/commands";
+import { duplicateLayer, moveLayer, moveLayerInTime, renameLayer, setHidden, setInOut } from "../core/commands";
 import { nextLayerNumber } from "./shapes";
 import type { EditorController } from "../editor/controller";
 import { deleteKeys, isAnimated, keyColumns, moveKeys, snapToFrame, type KeyColumn } from "../editor/keyframeEdit";
@@ -28,7 +28,10 @@ export function Timeline(props: {
   const [drag, setDrag] = createSignal<Drag | null>(null);
   const [trim, setTrim] = createSignal<{ id: string; edge: "in" | "out"; t: number } | null>(null);
 
+  const [slide, setSlide] = createSignal<{ id: string; x0: number; dt: number } | null>(null);
   const range = (l: { id: string; inPoint?: number; outPoint?: number }): [number, number] => {
+    const sl = slide();
+    if (sl?.id === l.id) return [(l.inPoint ?? 0) + sl.dt, (l.outPoint ?? ctrl.document.duration) + sl.dt];
     const tr = trim();
     const a = l.inPoint ?? 0;
     const b = l.outPoint ?? ctrl.document.duration;
@@ -165,7 +168,30 @@ export function Timeline(props: {
                 {layer.name}
               </div>
               <div class="tl-track">
-                <div class="bar-range" style={{ left: `${xOf(range(layer)[0])}px`, width: `${xOf(range(layer)[1]) - xOf(range(layer)[0])}px` }}>
+                <div
+                  class="bar-range"
+                  onPointerDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    ctrl.setSelection(layer.id);
+                    setSlide({ id: layer.id, x0: e.clientX, dt: 0 });
+                  }}
+                  onPointerMove={(e) => {
+                    const sl = slide();
+                    if (!sl || sl.id !== layer.id) return;
+                    const a = layer.inPoint ?? 0;
+                    const b = layer.outPoint ?? ctrl.document.duration;
+                    const raw = ((e.clientX - sl.x0) / width()) * ctrl.document.duration;
+                    const dt = Math.min(Math.max(snapToFrame(raw, ctrl.document.fps), -a), ctrl.document.duration - b);
+                    setSlide({ ...sl, dt });
+                  }}
+                  onPointerUp={() => {
+                    const sl = slide();
+                    setSlide(null);
+                    if (sl && sl.id === layer.id && sl.dt !== 0) ctrl.execute(moveLayerInTime(layer.id, sl.dt));
+                  }}
+                  onPointerCancel={() => setSlide(null)}
+                  style={{ left: `${xOf(range(layer)[0])}px`, width: `${xOf(range(layer)[1]) - xOf(range(layer)[0])}px` }}>
                   <span
                     class="trim in"
                     onPointerDown={(e) => {
@@ -193,7 +219,7 @@ export function Timeline(props: {
                 <Index each={(props.tick(), isAnimated(layer) ? keyColumns(layer) : [])}>
                   {(col) => {
                     const dragging = () => drag()?.col.refs[0]?.keyId === col().refs[0]?.keyId && drag()?.layerId === layer.id;
-                    const x = () => xOf(col().t + (dragging() ? drag()!.dt : 0));
+                    const x = () => xOf(col().t + (dragging() ? drag()!.dt : 0) + (slide()?.id === layer.id ? slide()!.dt : 0));
                     return (
                       <span
                         class="key"

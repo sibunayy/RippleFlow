@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLayer, setBackground, setCanvas, duplicateLayer, renameLayer, moveLayer, removeKeyframe, removeLayer, setInOut, setKeyframe, setParent } from "./commands";
+import { addLayer, moveLayerInTime, setBackground, setCanvas, duplicateLayer, renameLayer, moveLayer, removeKeyframe, removeLayer, setInOut, setKeyframe, setParent } from "./commands";
 import { History } from "./history";
 import type { Composition, Layer, Track, Transform } from "./types";
 
@@ -153,5 +153,24 @@ describe("composition settings", () => {
   it("is a no-op when nothing changes and sets the background", () => {
     expect(setCanvas({ width: 1920 }).apply(empty)).toBe(empty);
     expect(setBackground([0, 0, 0, 1]).apply(empty).background).toEqual([0, 0, 0, 1]);
+  });
+});
+
+describe("moveLayerInTime", () => {
+  const k = (t: number) => ({ id: `k${t}`, t, value: 1 });
+  const l = (): Layer => ({ ...layer("a"), inPoint: 1, outPoint: 3, transform: { ...tf(), x: { keys: [k(1), k(2)] } } });
+  const move = (dt: number, lay = l()) => moveLayerInTime("a", dt).apply({ ...empty, layers: [lay] }).layers[0]!;
+  it("shifts range and keyframes together", () => {
+    const m = move(2);
+    expect([m.inPoint, m.outPoint]).toEqual([3, 5]);
+    expect(m.transform.x.keys.map((q) => q.t)).toEqual([3, 4]);
+  });
+  it("clamps to the composition", () => {
+    expect(move(-5).inPoint).toBe(0);
+    expect(move(99).outPoint).toBe(10);
+  });
+  it("moves a video's start", () => {
+    const v = { asset: "x", codedWidth: 1, codedHeight: 1, rotation: 0 as const, duration: 5, start: 1 };
+    expect(move(1, { ...l(), video: v }).video?.start).toBe(2);
   });
 });
