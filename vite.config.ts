@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -29,7 +30,17 @@ function serviceWorker(): Plugin {
   };
 }
 
+/** Short git commit of this build, so a device can say which version it is running. */
+function buildId(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    return "dev";
+  }
+}
+
 export default defineConfig({
+  define: { __BUILD_ID__: JSON.stringify(buildId()) },
   plugins: [solid(), serviceWorker()],
   base: "./",
   build: { rollupOptions: { input: { main: "index.html", spike: "spike.html", export: "export.html", video: "video.html", input: "input.html" } } },

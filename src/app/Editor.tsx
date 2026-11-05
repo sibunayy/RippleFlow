@@ -230,6 +230,7 @@ export function Editor() {
         <button onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}>Redo</button>
         <span class="sep" />
         <button onClick={() => { setPlaying(false); setExporting(true); }}>Export</button>
+        <span class="build" title="Build">{typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}</span>
         <span class="save" classList={{ bad: saveState() === "error" || saveState() === "unavailable" }}>
           {({ saved: "Saved", saving: "Saving…", dirty: "Unsaved", error: "Save failed", unavailable: "Not saved: storage unavailable" } as const)[saveState()]}
         </span>

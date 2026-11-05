@@ -52,7 +52,8 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .g-handle { fill: #fff; stroke: #4aa3ff; stroke-width: 3; touch-action: none; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .presets button { min-height: 40px; padding: 0 10px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 13px; }
-.save { margin-left: auto; font-size: 13px; opacity: 0.7; white-space: nowrap; }
+.build { margin-left: auto; font-size: 11px; opacity: 0.45; font-variant-numeric: tabular-nums; }
+.save { margin-left: 8px; font-size: 13px; opacity: 0.7; white-space: nowrap; }
 .save.bad { color: #ff9a8a; opacity: 1; }
 .notice { top: 12px; bottom: auto; background: #5a4a1f; }
 .update { background: #1f3f5a; }
@@ -70,3 +71,4 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .sheet .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
 .sheet .warn { color: #ff9a8a; }
 .sheet .preview { width: 100%; border-radius: 8px; background: #000; }
+.props .slider { width: 120px; min-height: 28px; padding: 0; }

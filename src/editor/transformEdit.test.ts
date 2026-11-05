@@ -52,7 +52,9 @@ describe("applyWorldDelta", () => {
   it("auto-key writes a keyframe at the current time only", () => {
     const base = comp(layer("a"));
     const c = applyWorldDelta(base, "a", translate(30, 0), 2, true);
-    expect(c.layers[0]!.transform.x.keys.map((k) => [k.t, k.value])).toEqual([[2, 30]]);
+    // The first keyframe after time 0 also pins the old value at 0, so the move animates instead of just jumping.
+    expect(c.layers[0]!.transform.x.keys.map((k) => [k.t, k.value])).toEqual([[0, 0], [2, 30]]);
+    expect(evalTrack(c.layers[0]!.transform.x, 1)).toBe(15);
   });
 
   it("keys at t when the track already animates", () => {
@@ -104,6 +106,36 @@ describe("setPropValue", () => {
   });
   it("keys at the playhead with auto-key", () => {
     const c = setPropValue("a", "x", 50, 2, true).apply(comp(layer("a")));
-    expect(c.layers[0]!.transform.x.keys.map((k) => [k.t, k.value])).toEqual([[2, 50]]);
+    expect(c.layers[0]!.transform.x.keys.map((k) => [k.t, k.value])).toEqual([[0, 0], [2, 50]]);
+  });
+});
+
+describe("auto-key on properties that start with no keys", () => {
+  it.each(["rotation", "opacity", "scaleX"] as const)("%s animates from its old value instead of jumping", (prop) => {
+    const before = propValue(layer("a"), prop, 0);
+    const c = setPropValue("a", prop, prop === "opacity" ? 0.2 : prop === "scaleX" ? 3 : 90, 2, true).apply(comp(layer("a")));
+    const track = c.layers[0]!.transform[prop];
+    expect(track.keys.map((k) => k.t)).toEqual([0, 2]);
+    expect(evalTrack(track, 0)).toBe(before);
+    expect(evalTrack(track, 1)).toBeCloseTo((before + evalTrack(track, 2)) / 2, 6);
+  });
+
+  it("at time 0 a single keyframe is enough", () => {
+    const c = setPropValue("a", "rotation", 45, 0, true).apply(comp(layer("a")));
+    expect(c.layers[0]!.transform.rotation.keys).toHaveLength(1);
+  });
+
+  it("a drag that only rotates (anchor at the centre) now animates too", () => {
+    const l = layer("a");
+    const base = comp({ ...l, transform: { ...l.transform, x: track([0, 100]), y: track([0, 100]) } });
+    const c = applyWorldDelta(base, "a", rotate(Math.PI / 2), 3, true); // pivot at the origin moves the layer; use the layer's own centre instead
+    expect(c).not.toBe(base);
+  });
+
+  it("does not add a base key when the track already has keys", () => {
+    const l = layer("a");
+    const base = comp({ ...l, transform: { ...l.transform, opacity: track([1, 0.5]) } });
+    const c = setPropValue("a", "opacity", 0.9, 3, true).apply(base);
+    expect(c.layers[0]!.transform.opacity.keys.map((k) => k.t)).toEqual([1, 3]);
   });
 });

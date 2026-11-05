@@ -92,6 +92,6 @@ describe("EditorController", () => {
     c.pointerDown(pen(1, 50, 50));
     c.pointerMove(pen(1, 70, 50));
     c.pointerUp(pen(1, 70, 50));
-    expect(c.document.layers[0]!.transform.x.keys.map((k) => [k.t, k.value])).toEqual([[2, 20]]);
+    expect(c.document.layers[0]!.transform.x.keys.map((k) => [k.t, k.value])).toEqual([[0, 0], [2, 20]]); // old value pinned at 0, so the move animates
   });
 });
