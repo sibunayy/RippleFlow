@@ -43,3 +43,12 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .trim.in { left: -11px; } .trim.in::after { left: 8px; }
 .trim.out { right: -11px; } .trim.out::after { right: 8px; }
 .key { z-index: 1; }
+.graph { position: absolute; top: 12px; right: 12px; width: 264px; padding: 10px; background: #24242bf2; border-radius: 14px; box-shadow: 0 6px 24px #0008; }
+.graph svg { display: block; touch-action: none; }
+.g-box { fill: #1a1a1f; stroke: #44444e; }
+.g-lin { stroke: #44444e; stroke-dasharray: 4 4; }
+.g-curve { fill: none; stroke: #ffd24a; stroke-width: 2.5; }
+.g-arm { stroke: #8fb4ff; stroke-width: 1.5; }
+.g-handle { fill: #fff; stroke: #4aa3ff; stroke-width: 3; touch-action: none; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.presets button { min-height: 40px; padding: 0 10px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 13px; }

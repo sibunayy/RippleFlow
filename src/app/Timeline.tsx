@@ -13,10 +13,16 @@ interface Drag {
 }
 
 /** Layer list on the left, keyframe diamonds on the right, ruler on top. */
-export function Timeline(props: { ctrl: EditorController; tick: () => number }) {
+export function Timeline(props: {
+  ctrl: EditorController;
+  tick: () => number;
+  picked: () => KeyColumn | null;
+  setPicked: (c: KeyColumn | null) => void;
+}) {
   const ctrl = props.ctrl;
   let track!: HTMLDivElement;
-  const [picked, setPicked] = createSignal<KeyColumn | null>(null);
+  const picked = props.picked;
+  const setPicked = props.setPicked;
   const [pickedLayer, setPickedLayer] = createSignal<string | null>(null);
   const [drag, setDrag] = createSignal<Drag | null>(null);
   const [trim, setTrim] = createSignal<{ id: string; edge: "in" | "out"; t: number } | null>(null);
