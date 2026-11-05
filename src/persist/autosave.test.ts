@@ -65,6 +65,7 @@ describe("Autosaver", () => {
     const store: ProjectStore = {
       load: async (id) => files.get(id) ?? null,
       remove: async () => {},
+      list: async () => [],
       save: async (id, text) => {
         active++;
         maxActive = Math.max(maxActive, active);

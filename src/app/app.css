@@ -77,3 +77,14 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .sheet .warn { color: #ff9a8a; }
 .sheet .preview { width: 100%; border-radius: 8px; background: #000; }
 .sheet .compat { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; opacity: 0.8; margin: 8px 0; line-height: 1.35; }
+.sheet .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; opacity: 0.9; }
+.sheet input[type="text"] { min-height: 44px; padding: 0 10px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
+.sheet .row.left { justify-content: flex-start; flex-wrap: wrap; }
+.sheet .muted { opacity: 0.6; font-size: 12px; }
+.plist { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.plist li { display: flex; gap: 6px; align-items: stretch; }
+.plist li.current .pick { outline: 2px solid #4aa3ff; }
+.plist .pick { flex: 1; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 6px 12px; text-align: left; min-width: 0; }
+.plist .pick strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet button.danger { background: #b3402e; }
+.bar .proj { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }

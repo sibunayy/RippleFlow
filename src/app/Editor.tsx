@@ -1,13 +1,18 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
-import { removeLayer } from "../core/commands";
+import type { Composition } from "../core/types";
+import { removeLayer, renameComposition } from "../core/commands";
 import { EditorController, type PointerInput } from "../editor/controller";
 import { MeshRenderer } from "../render/meshRenderer";
 import { buildDraws, SceneSync, selectionCorners } from "./sceneDraws";
 import { Autosaver, loadProject, type SaveState } from "../persist/autosave";
+import { blankProject, duplicateProject, LEGACY_ID, listProjects, newProjectId, recallCurrent, rememberCurrent, untitledName } from "../persist/projects";
+import { unpackBundle } from "../persist/bundle";
+import { ProjectsDialog } from "./ProjectsDialog";
 import { MemoryStore, OpfsStore, opfsAvailable, type ProjectStore } from "../persist/store";
 import { ImageLibrary } from "./images";
 import { VideoLibrary, type VideoMode } from "../video/videoLibrary";
-import { MemoryAssets, OpfsAssets } from "../persist/assets";
+import { MemoryAssets, OpfsAssets, type AssetStore } from "../persist/assets";
+import { serialize } from "../persist/serialize";
 import { addLayer, sequence, setDuration } from "../core/commands";
 import { addShape, newImageLayer, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
@@ -19,7 +24,7 @@ import { Timeline } from "./Timeline";
 
 declare global {
   interface Window {
-    __rf?: { ctrl: EditorController; renderer: MeshRenderer; frame: () => void; saver: Autosaver; images: ImageLibrary; videos: VideoLibrary };
+    __rf?: { ctrl: EditorController; renderer: MeshRenderer; frame: () => void; readonly saver: Autosaver; images: ImageLibrary; videos: VideoLibrary };
   }
 }
 
@@ -34,6 +39,8 @@ export function Editor() {
   const [saveState, setSaveState] = createSignal<SaveState | "unavailable">("saved");
   const [notice, setNotice] = createSignal<string | null>(null);
   const [exporting, setExporting] = createSignal(false);
+  const [projectsOpen, setProjectsOpen] = createSignal(false);
+  const [projectId, setProjectId] = createSignal(LEGACY_ID);
   const [update, setUpdate] = createSignal<(() => void) | null>(null);
   const store: ProjectStore = opfsAvailable() ? new OpfsStore() : new MemoryStore();
   const images = new ImageLibrary(opfsAvailable() ? new OpfsAssets() : new MemoryAssets(), () => {
@@ -86,7 +93,9 @@ export function Editor() {
     }
     fileInput.value = ""; // allow picking the same file again
   };
-  const saver = new Autosaver({ store, id: "autosave", onState: (st) => setSaveState(st) });
+  const assetStore: AssetStore = opfsAvailable() ? new OpfsAssets() : new MemoryAssets();
+  const makeSaver = (id: string) => new Autosaver({ store, id, onState: (st) => setSaveState(st) });
+  let saver = makeSaver(LEGACY_ID);
   if (!opfsAvailable()) setSaveState("unavailable");
   let renderer: MeshRenderer | undefined;
   const sync = new SceneSync();
@@ -148,7 +157,7 @@ export function Editor() {
       renderer = await MeshRenderer.create(canvas);
       renderer.clearColor = { r: 0.13, g: 0.13, b: 0.15, a: 1 };
       resize();
-      if (new URLSearchParams(location.search).has("debug")) window.__rf = { ctrl, renderer, frame: () => frame(performance.now()), saver, images, videos };
+      if (new URLSearchParams(location.search).has("debug")) window.__rf = { ctrl, renderer, frame: () => frame(performance.now()), get saver() { return saver; }, images, videos, openProject, newProject } as unknown as NonNullable<typeof window.__rf>;
       if (!noloop) raf = requestAnimationFrame(frame);
       else frame(performance.now());
     } catch (e) {
@@ -156,25 +165,91 @@ export function Editor() {
     }
   });
 
+  /** Switch to another stored project. The current one is written first. */
+  async function openProject(id: string) {
+    await saver.flush();
+    setSaveState("saved");
+    const r = await loadProject(store, id);
+    saver.stop();
+    saver = makeSaver(id);
+    if (r.kind === "ok") {
+      saver.markSaved(r.doc);
+      ctrl.replaceDocument(r.doc);
+      setPicked(null);
+    } else if (r.kind === "corrupt") {
+      // Keep the damaged text so it is not lost when the next edit overwrites it.
+      await store.save(`${id}.corrupt`, r.text);
+      setNotice(`That project could not be read (${r.error.message}). A copy was kept as ${id}.corrupt.`);
+      saver.markSaved(ctrl.document);
+      return;
+    } else {
+      saver.markSaved(ctrl.document);
+    }
+    setProjectId(id);
+    rememberCurrent(id);
+  }
+
+  async function createProject(name?: string, doc?: Composition) {
+    await saver.flush();
+    const names = (await listProjects(store)).map((p) => p.name);
+    const id = newProjectId();
+    const d = doc ?? blankProject(name ?? untitledName(names));
+    await store.save(id, serialize(d)); // saved at once so it shows in the list
+    saver.stop();
+    saver = makeSaver(id);
+    saver.markSaved(d);
+    ctrl.replaceDocument(d);
+    setPicked(null);
+    setProjectId(id);
+    rememberCurrent(id);
+  }
+  const newProject = () => createProject();
+
   async function restore() {
     try {
-      const r = await loadProject(store, "autosave");
-      if (r.kind === "ok") {
-        saver.markSaved(r.doc);
-        ctrl.replaceDocument(r.doc);
-      } else if (r.kind === "corrupt") {
-        // Keep the damaged text so it is not lost when the next edit overwrites the autosave.
-        await store.save("autosave.corrupt", r.text);
-        setNotice(`Your last project could not be read (${r.error.message}). A copy was kept as autosave.corrupt.`);
-        saver.markSaved(ctrl.document);
-      } else {
-        saver.markSaved(ctrl.document);
+      const all = await listProjects(store);
+      const remembered = recallCurrent();
+      const pick = all.find((p) => p.id === remembered && !p.broken) ?? all.find((p) => !p.broken);
+      if (pick) {
+        const r = await loadProject(store, pick.id);
+        if (r.kind === "ok") {
+          saver = makeSaver(pick.id);
+          saver.markSaved(r.doc);
+          ctrl.replaceDocument(r.doc);
+          setProjectId(pick.id);
+          rememberCurrent(pick.id);
+          return;
+        }
       }
+      if (all.some((p) => p.broken)) setNotice("Some saved projects could not be read. Open Projects to delete them.");
+      await createProject();
     } catch (e) {
       // Saving stays off: we could not read what is there, so we must not overwrite it.
+      saver.stop();
       setSaveState("unavailable");
       setNotice(`Could not open saved work, so autosave is off: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  async function importBundle(file: File) {
+    const { comp, assets } = await unpackBundle(file);
+    for (const a of assets) if (!(await assetStore.has(a.id))) await assetStore.put(a.id, a.blob);
+    const names = (await listProjects(store)).map((p) => p.name);
+    const name = comp.name && !names.includes(comp.name) ? comp.name : `${comp.name ?? "Imported"} (restored)`;
+    await createProject(name, { ...comp, name });
+    setProjectsOpen(false);
+  }
+
+  async function deleteProject(id: string) {
+    if (id !== projectId()) {
+      await store.remove(id);
+      return;
+    }
+    saver.stop();
+    await store.remove(id);
+    const rest = (await listProjects(store)).find((p) => !p.broken);
+    if (rest) await openProject(rest.id);
+    else await createProject();
   }
 
   const input = (e: PointerEvent): PointerInput => {
@@ -216,7 +291,7 @@ export function Editor() {
   return (
     <div class="app">
       <header class="bar">
-        <strong>RippleFlow</strong>
+        <button class="proj" title="Projects" onClick={() => { setPlaying(false); setProjectsOpen(true); }}>{(tick(), ctrl.document.name ?? "Project")} ▾</button>
         <button onClick={() => add("rect")}>Rect</button>
         <button onClick={() => add("ellipse")}>Ellipse</button>
         <button onClick={() => add("star")}>Star</button>
@@ -281,6 +356,29 @@ export function Editor() {
           <p class="error">WebGPU unavailable: {error()}</p>
         </Show>
       </div>
+      <Show when={projectsOpen()}>
+        <ProjectsDialog
+          store={store}
+          assets={assetStore}
+          currentId={projectId()}
+          comp={() => (tick(), ctrl.document)}
+          flush={() => saver.flush()}
+          onRename={(n) => ctrl.execute(renameComposition(n))}
+          onOpen={(id) => void openProject(id).then(() => setProjectsOpen(false))}
+          onNew={() => void createProject().then(() => setProjectsOpen(false))}
+          onDuplicate={async (id) => {
+            await saver.flush();
+            const all = await listProjects(store);
+            const base = all.find((p) => p.id === id)?.name ?? "Project";
+            let name = `${base} copy`;
+            for (let n = 2; all.some((p) => p.name === name); n++) name = `${base} copy ${n}`;
+            await duplicateProject(store, id, name);
+          }}
+          onDelete={deleteProject}
+          onImport={importBundle}
+          onClose={() => setProjectsOpen(false)}
+        />
+      </Show>
       <Show when={exporting()}>
         <ExportDialog comp={() => ctrl.document} bitmapOf={(a) => images.bitmapOf(a)} videoSession={() => videos.exportSession()} onClose={() => setExporting(false)} />
       </Show>

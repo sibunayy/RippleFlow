@@ -33,15 +33,16 @@ await page.waitForTimeout(200);
 await open();
 console.log("after hide+reload layers:", JSON.stringify(await summary()));
 
-// Corrupt the stored file.
-await page.evaluate(async () => {
+// Corrupt the stored file of the open project. It must be left alone (not overwritten), flagged in the list, and the app must still start.
+const cur = await page.evaluate(() => localStorage.getItem("rf.current"));
+await page.evaluate(async (id) => {
   const d = await (await navigator.storage.getDirectory()).getDirectoryHandle("projects");
-  const w = await (await d.getFileHandle("autosave.json")).createWritable();
+  const w = await (await d.getFileHandle(id + ".json")).createWritable();
   await w.write("{broken"); await w.close();
-});
+}, cur);
 await open();
-console.log("corrupt -> layers:", JSON.stringify(await summary()), "notice:", (await page.locator(".notice").innerText()).slice(0, 70));
-const kept = await page.evaluate(async () => { const d = await (await navigator.storage.getDirectory()).getDirectoryHandle("projects"); return (await (await d.getFileHandle("autosave.corrupt.json")).getFile()).text(); });
-console.log("corrupt copy kept:", kept);
+console.log("corrupt -> app opened a different project, layers:", JSON.stringify(await summary()), "notice:", (await page.locator(".notice").innerText()).slice(0, 80));
+const kept = await page.evaluate(async (id) => { const d = await (await navigator.storage.getDirectory()).getDirectoryHandle("projects"); return (await (await d.getFileHandle(id + ".json")).getFile()).text(); }, cur);
+console.log("damaged file untouched:", kept === "{broken");
 console.log("errors:", errors.length ? errors : "none");
 await browser.close();

@@ -127,6 +127,18 @@ export function setDuration(seconds: number): Command {
   };
 }
 
+/** Rename the project. Blank names are not allowed. */
+export function renameComposition(name: string): Command {
+  return {
+    label: "Rename project",
+    apply(comp) {
+      const n = name.trim().slice(0, 80);
+      if (!n) throw new Error("A project needs a name");
+      return n === comp.name ? comp : { ...comp, name: n };
+    },
+  };
+}
+
 /** Several edits as one undo step. They apply in order; if one throws, none take effect. */
 export function sequence(label: string, commands: readonly Command[]): Command {
   return {
