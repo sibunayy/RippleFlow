@@ -20,6 +20,7 @@ import {
 } from "../editor/styleEdit";
 import { Compositing } from "./Compositing";
 import { Effects } from "./Effects";
+import { setTrim, trimValue } from "../editor/trimEdit";
 import { ScrubField } from "./ScrubField";
 import { TextPanel } from "./TextPanel";
 
@@ -215,6 +216,19 @@ export function Style(props: { ctrl: EditorController; tick: () => number; notif
                             />
                             <Seg label="Join" value={() => st().join ?? "miter"} options={JOINS.map((j) => ({ id: j, label: j }))} onPick={(j) => run(patchStroke(id(), "Stroke join", { join: j }))} />
                             <Seg label="Cap" value={() => st().cap ?? "butt"} options={CAPS.map((c) => ({ id: c, label: c }))} onPick={(c) => run(patchStroke(id(), "Stroke cap", { cap: c }))} />
+                            <For each={["start", "end"] as const}>
+                              {(which) => (
+                                <ScrubField
+                                  label={which === "start" ? "Trim start %" : "Trim end %"}
+                                  value={() => (props.tick(), trimValue(s(), which, ctrl.time) * 100)}
+                                  perPx={0.4}
+                                  min={0}
+                                  max={100}
+                                  onPreview={(v) => preview(setTrim(id(), which, v / 100, ctrl.time, ctrl.autoKey))}
+                                  onCommit={(v) => run(setTrim(id(), which, v / 100, ctrl.time, ctrl.autoKey))}
+                                />
+                              )}
+                            </For>
                           </>
                         )}
                       </Show>

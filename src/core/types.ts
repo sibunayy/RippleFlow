@@ -125,6 +125,8 @@ export interface ShapeContent {
     readonly join?: "miter" | "round" | "bevel";
     readonly cap?: "butt" | "round" | "square";
   };
+  /** Trim paths: draw only the stretch of the stroke between these fractions (0..1) of its length. Keyframable. */
+  readonly trim?: { readonly start: Track; readonly end: Track };
 }
 
 /** Reference to an imported picture. The bytes live in the asset store under `asset`. */

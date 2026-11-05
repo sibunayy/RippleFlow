@@ -151,7 +151,11 @@ function text(v: unknown, what: string): TextContent {
 
 function shape(v: unknown, what: string): ShapeContent {
   if (!isObj(v)) return fail(`${what} must be an object`);
-  const out: { path: string; fill?: Rgba; gradient?: Gradient; stroke?: ShapeContent["stroke"] } = { path: str(v.path, `${what}.path`) };
+  const out: { path: string; fill?: Rgba; gradient?: Gradient; stroke?: ShapeContent["stroke"]; trim?: ShapeContent["trim"] } = { path: str(v.path, `${what}.path`) };
+  if (v.trim !== undefined) {
+    if (!isObj(v.trim)) return fail(`${what}.trim must be an object`);
+    out.trim = { start: track(v.trim.start ?? { keys: [] }, `${what}.trim.start`), end: track(v.trim.end ?? { keys: [] }, `${what}.trim.end`) };
+  }
   if (v.fill !== undefined) out.fill = rgba(v.fill, `${what}.fill`);
   if (v.gradient !== undefined) out.gradient = gradient(v.gradient, `${what}.gradient`);
   if (v.stroke !== undefined) {

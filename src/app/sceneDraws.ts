@@ -40,7 +40,12 @@ function layerDraws(item: SceneItem, g: ShapeGeometry, toDevice: Affine, mediaOf
       alpha *= us.opacity;
     }
     // Non-uniform layer scale would thin a stroke along one axis; rebuild it in scaled space instead.
-    if (part.strokeAt && sx > 1e-9 && sy > 1e-9 && Math.abs(sx - sy) > 1e-3 * Math.max(sx, sy)) {
+    const nonUniform = sx > 1e-9 && sy > 1e-9 && Math.abs(sx - sy) > 1e-3 * Math.max(sx, sy);
+    if (part.trimAt && item.trim && (item.trim.start > 1e-9 || item.trim.end < 1 - 1e-9)) {
+      // Trim paths: the visible stretch of the stroke, rebuilt when the range changes (cached by range).
+      mesh = part.trimAt(item.trim.start, item.trim.end, nonUniform ? sx : 1, nonUniform ? sy : 1);
+      if (nonUniform) base = multiply(base, [1 / sx, 0, 0, 1 / sy, 0, 0]);
+    } else if (part.strokeAt && nonUniform) {
       mesh = part.strokeAt(sx, sy);
       base = multiply(base, [1 / sx, 0, 0, 1 / sy, 0, 0]);
     }

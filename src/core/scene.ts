@@ -22,6 +22,8 @@ export interface SceneItem {
   readonly units?: readonly UnitState[];
   /** Image layers with puppet pins: where each pin is pulled to now. */
   readonly pins?: readonly ResolvedPin[];
+  /** Shape layers with trim paths: the visible stretch of the stroke now (fractions of its length). */
+  readonly trim?: { readonly start: number; readonly end: number };
   /** The matte layer evaluated at this instant. `source` is null when it is not visible now (an empty matte). */
   readonly matte?: { readonly mode: MatteMode; readonly source: SceneItem | null };
 }
@@ -49,6 +51,7 @@ export function evaluateScene(comp: Composition, t: number): SceneItem[] {
       effects: withMatte ? resolveEffects(layer, t) : [],
       masks: withMatte ? (layer.masks ?? []) : [],
       ...(layer.image?.pins?.length ? { pins: layer.image.pins.map((p) => ({ x: p.x, y: p.y, dx: evalTrack(p.dx, t, 0), dy: evalTrack(p.dy, t, 0) })) } : {}),
+      ...(layer.shape?.trim ? { trim: { start: clamp01(evalTrack(layer.shape.trim.start, t, 0)), end: clamp01(evalTrack(layer.shape.trim.end, t, 1)) } } : {}),
       ...(layer.text?.animator ? { units: unitStates(layer.text.animator, textUnits(layer.text.text, layer.text.animator.unit).length, t) } : {}),
     };
     if (!withMatte || !layer.matte) return item;
@@ -62,3 +65,5 @@ export function evaluateScene(comp: Composition, t: number): SceneItem[] {
   }
   return items;
 }
+
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
