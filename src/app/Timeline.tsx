@@ -1,5 +1,5 @@
 import { createSignal, For, Index, Show } from "solid-js";
-import { moveLayer } from "../core/commands";
+import { moveLayer, setInOut } from "../core/commands";
 import type { EditorController } from "../editor/controller";
 import { deleteKeys, isAnimated, keyColumns, moveKeys, snapToFrame, type KeyColumn } from "../editor/keyframeEdit";
 
@@ -19,6 +19,31 @@ export function Timeline(props: { ctrl: EditorController; tick: () => number }) 
   const [picked, setPicked] = createSignal<KeyColumn | null>(null);
   const [pickedLayer, setPickedLayer] = createSignal<string | null>(null);
   const [drag, setDrag] = createSignal<Drag | null>(null);
+  const [trim, setTrim] = createSignal<{ id: string; edge: "in" | "out"; t: number } | null>(null);
+
+  const range = (l: { id: string; inPoint?: number; outPoint?: number }): [number, number] => {
+    const tr = trim();
+    const a = l.inPoint ?? 0;
+    const b = l.outPoint ?? ctrl.document.duration;
+    return tr?.id === l.id ? (tr.edge === "in" ? [tr.t, b] : [a, tr.t]) : [a, b];
+  };
+  const trimMove = (e: PointerEvent, l: { id: string; inPoint?: number; outPoint?: number }, edge: "in" | "out") => {
+    const cur = trim();
+    if (!cur || cur.id !== l.id || cur.edge !== edge) return;
+    const r = track.getBoundingClientRect();
+    const frame = 1 / ctrl.document.fps;
+    const t = tOf(e.clientX - r.left);
+    const a = l.inPoint ?? 0;
+    const b = l.outPoint ?? ctrl.document.duration;
+    setTrim({ id: l.id, edge, t: edge === "in" ? Math.min(t, b - frame) : Math.max(t, a + frame) });
+  };
+  const trimUp = (l: { id: string; inPoint?: number; outPoint?: number }) => {
+    const cur = trim();
+    setTrim(null);
+    if (!cur) return;
+    const [a, b] = [cur.edge === "in" ? cur.t : (l.inPoint ?? 0), cur.edge === "out" ? cur.t : (l.outPoint ?? ctrl.document.duration)];
+    ctrl.execute(setInOut(l.id, a, b));
+  };
 
   const width = () => track?.clientWidth || 1;
   const xOf = (t: number) => (t / ctrl.document.duration) * width();
@@ -101,6 +126,30 @@ export function Timeline(props: { ctrl: EditorController; tick: () => number }) 
                 {layer.name}
               </div>
               <div class="tl-track">
+                <div class="bar-range" style={{ left: `${xOf(range(layer)[0])}px`, width: `${xOf(range(layer)[1]) - xOf(range(layer)[0])}px` }}>
+                  <span
+                    class="trim in"
+                    onPointerDown={(e) => {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      ctrl.setSelection(layer.id);
+                      setTrim({ id: layer.id, edge: "in", t: layer.inPoint ?? 0 });
+                    }}
+                    onPointerMove={(e) => trimMove(e, layer, "in")}
+                    onPointerUp={() => trimUp(layer)}
+                    onPointerCancel={() => setTrim(null)}
+                  />
+                  <span
+                    class="trim out"
+                    onPointerDown={(e) => {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      ctrl.setSelection(layer.id);
+                      setTrim({ id: layer.id, edge: "out", t: layer.outPoint ?? ctrl.document.duration });
+                    }}
+                    onPointerMove={(e) => trimMove(e, layer, "out")}
+                    onPointerUp={() => trimUp(layer)}
+                    onPointerCancel={() => setTrim(null)}
+                  />
+                </div>
                 {/* Index, not For: the diamond under the pen must survive the re-render a selection change causes. */}
                 <Index each={(props.tick(), isAnimated(layer) ? keyColumns(layer) : [])}>
                   {(col) => {

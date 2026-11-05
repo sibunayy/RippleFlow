@@ -86,3 +86,24 @@ describe("applyWorldDelta", () => {
     expect(evalTrack(tr.y, 0)).toBeCloseTo(100);
   });
 });
+
+import { propValue, setPropValue } from "./transformEdit";
+
+describe("setPropValue", () => {
+  it("sets a static property and ignores no-ops", () => {
+    const base = comp(layer("a"));
+    const c = setPropValue("a", "rotation", 45, 1, false).apply(base);
+    expect(propValue(c.layers[0]!, "rotation", 3)).toBe(45);
+    expect(setPropValue("a", "rotation", 0, 1, false).apply(base)).toBe(base);
+  });
+  it("clamps opacity and rejects NaN", () => {
+    const base = comp(layer("a"));
+    expect(propValue(setPropValue("a", "opacity", 3, 0, false).apply(base).layers[0]!, "opacity", 0)).toBe(1);
+    expect(propValue(setPropValue("a", "opacity", -1, 0, false).apply(base).layers[0]!, "opacity", 0)).toBe(0);
+    expect(setPropValue("a", "x", NaN, 0, false).apply(base)).toBe(base);
+  });
+  it("keys at the playhead with auto-key", () => {
+    const c = setPropValue("a", "x", 50, 2, true).apply(comp(layer("a")));
+    expect(c.layers[0]!.transform.x.keys.map((k) => [k.t, k.value])).toEqual([[2, 50]]);
+  });
+});

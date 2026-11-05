@@ -25,7 +25,7 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .tl-row { display: flex; height: 44px; border-top: 1px solid #2c2c34; }
 .tl-row.on { background: #2a3445; }
 .tl-label { width: 132px; flex: none; padding: 0 12px; line-height: 44px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; }
-.tl-track { position: relative; flex: 1; touch-action: none; }
+.tl-track { position: relative; flex: 1; margin-right: 16px; touch-action: none; }
 .ruler { background: #26262e; }
 .tick { position: absolute; top: 0; padding-left: 4px; font-size: 12px; line-height: 44px; border-left: 1px solid #44444e; height: 100%; opacity: 0.7; pointer-events: none; }
 .key { position: absolute; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: #ffd24a; transform: rotate(45deg) scale(0.62); border-radius: 3px; touch-action: none; }
@@ -33,3 +33,13 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .key.picked { background: #fff; outline: 3px solid #4aa3ff; }
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #ff5a5a; pointer-events: none; }
 .empty { padding: 12px; opacity: 0.6; margin: 0; }
+.props { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 6px 12px; background: #24242b; }
+.props-name { min-width: 80px; }
+.props label { display: flex; flex-direction: column; font-size: 11px; opacity: 0.9; gap: 2px; }
+.props input { width: 84px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
+.bar-range { position: absolute; top: 8px; bottom: 8px; background: #3b4a66; border-radius: 6px; }
+.trim { position: absolute; top: -4px; bottom: -4px; width: 22px; touch-action: none; }
+.trim::after { content: ""; position: absolute; top: 4px; bottom: 4px; width: 6px; background: #8fb4ff; border-radius: 3px; }
+.trim.in { left: -11px; } .trim.in::after { left: 8px; }
+.trim.out { right: -11px; } .trim.out::after { right: 8px; }
+.key { z-index: 1; }
