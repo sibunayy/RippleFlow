@@ -16,3 +16,20 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .sel { fill: none; stroke: #4aa3ff; stroke-width: 1.5; }
 .handle { fill: #fff; stroke: #4aa3ff; stroke-width: 2; }
 .error { position: absolute; inset: auto 12px 12px; padding: 12px; background: #5a1f1f; border-radius: 8px; }
+.timeline { background: #202026; max-height: 38%; display: flex; flex-direction: column; }
+.tl-tools { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
+.tl-tools button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #34343e; color: inherit; font-size: 15px; }
+.tl-tools button:disabled { opacity: 0.4; }
+.hint { opacity: 0.55; font-size: 13px; }
+.tl-body { position: relative; overflow-y: auto; }
+.tl-row { display: flex; height: 44px; border-top: 1px solid #2c2c34; }
+.tl-row.on { background: #2a3445; }
+.tl-label { width: 132px; flex: none; padding: 0 12px; line-height: 44px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; }
+.tl-track { position: relative; flex: 1; touch-action: none; }
+.ruler { background: #26262e; }
+.tick { position: absolute; top: 0; padding-left: 4px; font-size: 12px; line-height: 44px; border-left: 1px solid #44444e; height: 100%; opacity: 0.7; pointer-events: none; }
+.key { position: absolute; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; background: #ffd24a; transform: rotate(45deg) scale(0.62); border-radius: 3px; touch-action: none; }
+.key::after { content: ""; position: absolute; inset: -14px; }
+.key.picked { background: #fff; outline: 3px solid #4aa3ff; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #ff5a5a; pointer-events: none; }
+.empty { padding: 12px; opacity: 0.6; margin: 0; }
