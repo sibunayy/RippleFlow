@@ -1,12 +1,16 @@
 import { apply, invert, multiply, scale, translate, type Affine } from "../core/affine";
 import { History, type Command } from "../core/history";
 import { evaluateScene, type SceneItem } from "../core/scene";
-import type { Composition, Id, VideoContent } from "../core/types";
+import type { Composition, Id, Mask, VideoContent } from "../core/types";
+import type { Mesh } from "../geometry/mesh";
+import { tessellateFill } from "../geometry/fill";
+import { flatten } from "../geometry/path";
+import { parseSvgPath } from "../geometry/svgPath";
 import type { FrameRef } from "../video/videoLibrary";
 import { buildImageGeometry, buildShapeGeometry, buildVideoGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
 import { TwoFingerGesture } from "../input/twoFingerGesture";
 import { applyWorldDelta, transformLayer } from "./transformEdit";
-import { editShape } from "../core/commands";
+import { editShape, patchMask } from "../core/commands";
 import { deleteNode, isSmooth, nodesToPath, parseNodes, setCorner, setSmooth, type NodePath } from "../geometry/nodes";
 import { NodeTool, type NodeContext, type NodeOutput, type NodeSel } from "./nodeTool";
 import { SelectTool, type ToolContext, type ToolOutput } from "./selectTool";
@@ -32,10 +36,12 @@ export class EditorController {
   private readonly tool = new SelectTool();
   private readonly gesture = new TwoFingerGesture();
   private readonly geometry = new WeakMap<object, ShapeGeometry>();
+  private readonly masks = new WeakMap<object, Mesh>();
   private listeners = new Set<() => void>();
   private preview: Composition | null = null;
   private readonly nodeTool = new NodeTool();
   private pointEditOn = false;
+  private pointMaskId: string | null = null;
   private parsed: { d: string; paths: NodePath[] } | null = null;
 
   /** Playhead, seconds. */
@@ -120,8 +126,13 @@ export class EditorController {
   get pointEdit(): boolean {
     return this.pointEditOn;
   }
-  setPointEdit(on: boolean): void {
+  /** Which mask's path is being edited, or null for the shape's own path. */
+  get pointMask(): string | null {
+    return this.pointMaskId;
+  }
+  setPointEdit(on: boolean, maskId: string | null = null): void {
     this.pointEditOn = on;
+    this.pointMaskId = on ? maskId : null;
     this.nodeTool.cancel();
     this.nodeTool.setSelection(null);
     this.dropPreview();
@@ -132,7 +143,8 @@ export class EditorController {
   }
 
   private pathsOf(doc: Composition, id: Id): NodePath[] | undefined {
-    const d = doc.layers.find((l) => l.id === id)?.shape?.path;
+    const layer = doc.layers.find((l) => l.id === id);
+    const d = this.pointMaskId ? layer?.masks?.find((m) => m.id === this.pointMaskId)?.path : layer?.shape?.path;
     if (d === undefined) return undefined;
     if (this.parsed?.d !== d) {
       try {
@@ -159,6 +171,7 @@ export class EditorController {
   }
 
   private editPoints(id: Id, paths: readonly NodePath[]) {
+    if (this.pointMaskId) return patchMask(id, this.pointMaskId, "Edit mask points", (m) => ({ ...m, path: nodesToPath(paths) }));
     return editShape(id, "Edit points", (s) => ({ ...s, path: nodesToPath(paths) }));
   }
 
@@ -241,6 +254,20 @@ export class EditorController {
       this.geometry.set(shape, g);
     }
     return g;
+  }
+
+  /** Triangles for a mask path, built once per mask object. */
+  maskMesh(mask: Mask): Mesh | undefined {
+    let m = this.masks.get(mask);
+    if (!m) {
+      try {
+        m = tessellateFill(flatten(parseSvgPath(mask.path), 0.1));
+      } catch {
+        return undefined;
+      }
+      this.masks.set(mask, m);
+    }
+    return m;
   }
 
   /** Current decoded frame of a video layer at composition time `t`. The app sets this; it returns undefined until a frame has decoded. */

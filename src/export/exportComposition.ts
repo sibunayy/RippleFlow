@@ -1,3 +1,8 @@
+import { tessellateFill } from "../geometry/fill";
+import { flatten } from "../geometry/path";
+import { parseSvgPath } from "../geometry/svgPath";
+import type { Mesh } from "../geometry/mesh";
+import type { Mask } from "../core/types";
 import { scale } from "../core/affine";
 import { evaluateScene } from "../core/scene";
 import type { Composition, Id, VideoContent } from "../core/types";
@@ -74,6 +79,16 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
     const videoOf = new Map(comp.layers.filter((l) => l.video).map((l) => [l.id, l.video!]));
     const toDevice = scale(width / comp.width, height / comp.height);
     const sync = new SceneSync();
+    const maskMeshes = new WeakMap<object, Mesh>();
+    const buildMask = (m: Mask): Mesh | undefined => {
+      try {
+        const mesh = tessellateFill(flatten(parseSvgPath(m.path), 0.1));
+        maskMeshes.set(m, mesh);
+        return mesh;
+      } catch {
+        return undefined;
+      }
+    };
 
     return await exportMp4(
       {
@@ -91,13 +106,13 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
         const items = evaluateScene(comp, t);
         // Decode this instant's frame of every visible video layer before drawing.
         const media = new Map<Id, FrameRef>();
-        for (const item of items) {
+        for (const item of items.flatMap((i) => (i.matte?.source ? [i, i.matte.source] : [i]))) {
           const v = videoOf.get(item.id);
-          if (!v) continue;
+          if (!v || media.has(item.id)) continue;
           const ref = await opts.videos?.frame(v, t);
           if (ref) media.set(item.id, ref);
         }
-        const draws = [backgroundDraw(comp, toDevice), ...drawsFor(items, (id) => geometry.get(id), toDevice, (id) => media.get(id))];
+        const draws = [backgroundDraw(comp, toDevice), ...drawsFor(items, (id) => geometry.get(id), toDevice, (id) => media.get(id), (m) => maskMeshes.get(m) ?? buildMask(m))];
         sync.sync(renderer, draws);
         if (rgbaReadback) {
           const data = await rgbaReadback.read();

@@ -1,4 +1,4 @@
-import { BLEND_MODES, MAX_GRADIENT_STOPS, type BlendMode, type Effect, type EffectType, type Gradient } from "../core/types";
+import { BLEND_MODES, MAX_GRADIENT_STOPS, type BlendMode, type Effect, type EffectType, type Gradient, type Mask, type Matte } from "../core/types";
 import { EFFECT_BY_TYPE } from "../core/effects";
 import type { Bezier, Composition, ImageContent, Keyframe, Layer, Rgba, ShapeContent, Track, Transform, VideoContent } from "../core/types";
 
@@ -86,6 +86,24 @@ function effects(v: unknown, what: string): Effect[] {
   });
 }
 
+function masks(v: unknown, what: string): Mask[] {
+  if (!Array.isArray(v)) return fail(`${what} must be an array`);
+  const seen = new Set<string>();
+  return v.map((raw, i) => {
+    const w = `${what}[${i}]`;
+    if (!isObj(raw)) return fail(`${w} must be an object`);
+    const id = str(raw.id, `${w}.id`);
+    if (seen.has(id)) fail(`${w} duplicates mask id ${id}`);
+    seen.add(id);
+    const mode = (["add", "subtract", "intersect"] as const).find((m) => m === raw.mode) ?? fail(`${w}.mode must be add, subtract or intersect`);
+    const feather = num(raw.feather, `${w}.feather`);
+    const opacity = num(raw.opacity, `${w}.opacity`);
+    if (feather < 0) fail(`${w}.feather must not be negative`);
+    if (opacity < 0 || opacity > 1) fail(`${w}.opacity must be within 0..1`);
+    return { id, path: str(raw.path, `${w}.path`), mode, feather, opacity, ...(raw.inverted === true ? { inverted: true } : {}) };
+  });
+}
+
 function gradient(v: unknown, what: string): Gradient {
   if (!isObj(v)) return fail(`${what} must be an object`);
   const kind = (["linear", "radial"] as const).find((k) => k === v.kind) ?? fail(`${what}.kind must be linear or radial`);
@@ -147,6 +165,14 @@ function layer(v: unknown, i: number): Layer {
   const transform = Object.fromEntries(TRACKS.map((p) => [p, track(tr[p] ?? { keys: [] }, `${what}.transform.${p}`)])) as unknown as Transform;
   const out: { -readonly [K in keyof Layer]: Layer[K] } = { id: str(v.id, `${what}.id`), name: str(v.name, `${what}.name`), kind, transform };
   if (v.blend !== undefined) out.blend = (BLEND_MODES as readonly unknown[]).includes(v.blend) ? (v.blend as BlendMode) : fail(`${what}.blend must be one of ${BLEND_MODES.join(", ")}`);
+  if (v.hidden === true) out.hidden = true;
+  if (v.masks !== undefined) out.masks = masks(v.masks, `${what}.masks`);
+  if (v.matte !== undefined) {
+    const m = v.matte;
+    if (!isObj(m)) return fail(`${what}.matte must be an object`);
+    const mode = (["alpha", "alphaInverted", "luma", "lumaInverted"] as const).find((x) => x === m.mode) ?? fail(`${what}.matte.mode`);
+    out.matte = { source: str(m.source, `${what}.matte.source`), mode } as Matte;
+  }
   if (v.effects !== undefined) out.effects = effects(v.effects, `${what}.effects`);
   if (v.parent !== undefined) out.parent = str(v.parent, `${what}.parent`);
   if (v.shape !== undefined) out.shape = shape(v.shape, `${what}.shape`);
@@ -189,6 +215,9 @@ export function deserialize(text: string): Composition {
     ids.add(l.id);
   }
   const byId = new Map(layers.map((l) => [l.id, l]));
+  for (const l of layers) {
+    if (l.matte && (!byId.has(l.matte.source) || l.matte.source === l.id)) fail(`layer ${l.id} has an invalid matte source ${l.matte.source}`);
+  }
   for (const l of layers) {
     const walk = new Set<string>([l.id]);
     for (let p = l.parent; p !== undefined; p = byId.get(p)!.parent) {

@@ -64,6 +64,29 @@ export interface Effect {
   readonly color?: Rgba;
 }
 
+export type MaskMode = "add" | "subtract" | "intersect";
+
+/** A vector mask: only the area inside (or outside, when inverted) shows. Masks combine in order. */
+export interface Mask {
+  readonly id: Id;
+  /** SVG path data in the layer's own coordinates. */
+  readonly path: string;
+  readonly mode: MaskMode;
+  /** Edge softness, composition units. */
+  readonly feather: number;
+  /** 0..1. */
+  readonly opacity: number;
+  readonly inverted?: boolean;
+}
+
+export type MatteMode = "alpha" | "alphaInverted" | "luma" | "lumaInverted";
+
+/** Another layer's shape or brightness decides where this layer shows. */
+export interface Matte {
+  readonly source: Id;
+  readonly mode: MatteMode;
+}
+
 /** How a layer's colours combine with what is behind it. Only modes the GPU's fixed blend stage can do exactly. */
 export type BlendMode = "normal" | "multiply" | "screen" | "add";
 export const BLEND_MODES: readonly BlendMode[] = ["normal", "multiply", "screen", "add"];
@@ -135,6 +158,10 @@ export interface Layer {
   readonly parent?: Id;
   /** Defaults to "normal". */
   readonly blend?: BlendMode;
+  /** Not drawn (it can still serve as a track matte). */
+  readonly hidden?: boolean;
+  readonly masks?: readonly Mask[];
+  readonly matte?: Matte;
   /** Applied in order to the layer as a whole (all its fill, stroke and picture), before blending. */
   readonly effects?: readonly Effect[];
   readonly transform: Transform;

@@ -19,6 +19,7 @@ const doc = {
     id: "layer-1", name: "Square", kind: "shape",
     shape: { path: "M0 0 H200 V200 H0 Z", fill: [1, 0, 0, 1] },
     ...(process.env.FX ? { effects: JSON.parse(process.env.FX) } : {}),
+    ...(process.env.EXTRA ? JSON.parse(process.env.EXTRA) : {}),
     transform: {
       anchorX: { keys: [{ id: "ax", t: 0, value: 100 }] }, anchorY: { keys: [{ id: "ay", t: 0, value: 100 }] },
       x: { keys: [{ id: "x0", t: 0, value: 300 }, { id: "x1", t: 1, value: 1500 }] },
