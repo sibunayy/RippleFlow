@@ -9,6 +9,7 @@ import { addShape, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
 import { Graph } from "./Graph";
 import { Props } from "./Props";
+import { registerServiceWorker } from "./pwa";
 import { Timeline } from "./Timeline";
 
 declare global {
@@ -27,6 +28,7 @@ export function Editor() {
   const [picked, setPicked] = createSignal<KeyColumn | null>(null);
   const [saveState, setSaveState] = createSignal<SaveState | "unavailable">("saved");
   const [notice, setNotice] = createSignal<string | null>(null);
+  const [update, setUpdate] = createSignal<(() => void) | null>(null);
   const store: ProjectStore = opfsAvailable() ? new OpfsStore() : new MemoryStore();
   const saver = new Autosaver({ store, id: "autosave", onState: (st) => setSaveState(st) });
   if (!opfsAvailable()) setSaveState("unavailable");
@@ -70,6 +72,7 @@ export function Editor() {
       removeEventListener("pagehide", hide);
     });
     void restore();
+    registerServiceWorker((apply) => setUpdate(() => apply));
     const resize = () => {
       const r = stage.getBoundingClientRect();
       const first = canvas.width <= 300;
@@ -194,6 +197,21 @@ export function Editor() {
           </Show>
         </svg>
         <Graph ctrl={ctrl} tick={tick} picked={picked} />
+        <Show when={update()}>
+          {(apply) => (
+            <p class="error notice update">
+              A new version is ready.{" "}
+              <button
+                onClick={() => {
+                  // Make sure the latest edit is on disk before the page reloads.
+                  void saver.flush().finally(() => apply()());
+                }}
+              >
+                Reload
+              </button>
+            </p>
+          )}
+        </Show>
         <Show when={notice()}>
           <p class="error notice" onClick={() => setNotice(null)}>{notice()}</p>
         </Show>
