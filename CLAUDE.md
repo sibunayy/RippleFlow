@@ -94,6 +94,8 @@ Align: six buttons in the Props panel align the selected layer to the compositio
 
 Trim paths: Style > Stroke has Trim start/end % (keyframable with auto-key) that draw a stroke on/off along its length (`ShapeContent.trim`, `src/geometry/trim.ts` slices the flattened outline by arc length, `ShapePart.trimAt` builds the trimmed stroke, cached by range; `src/editor/trimEdit.ts`). The scene item carries `trim`, so export matches. While the range animates the scene buffers are re-uploaded each frame (no in-place path yet). No timeline diamonds for trim keys (same as effects). `scripts/run-trim.mjs`.
 
+More shapes: toolbar "More…" menu adds rounded rect, triangle, hexagon, plus, arrow, heart and a stroked line (`MORE_SHAPES` in `src/app/shapes.ts`). `scripts/run-shapes.mjs`.
+
 Not built: audio (video clips export silent), slipping a clip (changing which part plays without moving it).
 
 Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.

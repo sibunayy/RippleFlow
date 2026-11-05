@@ -153,3 +153,4 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .anim-presets { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
 .anim-presets button { min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: #3b3b4a; color: inherit; }
 .anim-presets button.out { background: #46363b; }
+.more-shapes { min-height: 36px; padding: 0 8px; border: 0; border-radius: 8px; background: #34343e; color: inherit; }

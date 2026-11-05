@@ -10,11 +10,29 @@ import type { ImageContent, Layer, Rgba, TextContent, Track, VideoContent } from
 const empty: Track = { keys: [] };
 const still = (v: number): Track => ({ keys: [{ id: `s${v}`, t: 0, value: v }] });
 
-export type ShapeKind = "rect" | "ellipse" | "star";
+export type ShapeKind = "rect" | "ellipse" | "star" | "rounded" | "triangle" | "hexagon" | "plus" | "arrow" | "heart" | "line";
+
+/** Shapes offered in the toolbar's "More" menu. */
+export const MORE_SHAPES: readonly { kind: ShapeKind; label: string }[] = [
+  { kind: "rounded", label: "Rounded rect" },
+  { kind: "triangle", label: "Triangle" },
+  { kind: "hexagon", label: "Hexagon" },
+  { kind: "plus", label: "Plus" },
+  { kind: "arrow", label: "Arrow" },
+  { kind: "heart", label: "Heart" },
+  { kind: "line", label: "Line" },
+];
 
 const PATHS: Record<ShapeKind, string> = {
   rect: "M0 0 H240 V240 H0 Z",
   ellipse: "M0 120 A120 120 0 1 0 240 120 A120 120 0 1 0 0 120 Z",
+  rounded: "M40 0 H200 A40 40 0 0 1 240 40 V200 A40 40 0 0 1 200 240 H40 A40 40 0 0 1 0 200 V40 A40 40 0 0 1 40 0 Z",
+  triangle: "M120 10 L230 230 L10 230 Z",
+  hexagon: "M240 120 L180 224 L60 224 L0 120 L60 16 L180 16 Z",
+  plus: "M80 0 H160 V80 H240 V160 H160 V240 H80 V160 H0 V80 H80 Z",
+  arrow: "M0 90 H140 V30 L240 120 L140 210 V150 H0 Z",
+  heart: "M120 220 C20 150 0 90 0 60 C0 25 28 0 62 0 C88 0 110 14 120 38 C130 14 152 0 178 0 C212 0 240 25 240 60 C240 90 220 150 120 220 Z",
+  line: "M0 0 H240",
   star: "M120 0 L152 86 L240 92 L172 148 L194 236 L120 188 L46 236 L68 148 L0 92 L88 86 Z",
 };
 
@@ -30,12 +48,12 @@ const PALETTE: Rgba[] = [
 export function newShapeLayer(kind: ShapeKind, n: number, compW: number, compH: number): Layer {
   return {
     id: `layer-${n}`,
-    name: `${kind[0]!.toUpperCase()}${kind.slice(1)} ${n}`,
+    name: `${MORE_SHAPES.find((m) => m.kind === kind)?.label ?? `${kind[0]!.toUpperCase()}${kind.slice(1)}`} ${n}`,
     kind: "shape",
-    shape: { path: PATHS[kind], fill: PALETTE[n % PALETTE.length]! },
+    shape: kind === "line" ? { path: PATHS[kind], stroke: { color: [1, 1, 1, 1], width: 12, join: "round", cap: "round" } } : { path: PATHS[kind], fill: PALETTE[n % PALETTE.length]! },
     transform: {
       anchorX: still(120),
-      anchorY: still(120),
+      anchorY: still(kind === "line" ? 0 : 120),
       x: still(compW / 2),
       y: still(compH / 2),
       scaleX: empty,

@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { Composition } from "../core/types";
 import { removeLayer, renameComposition } from "../core/commands";
 import { EditorController, type PointerInput } from "../editor/controller";
@@ -16,7 +16,7 @@ import { MemoryAssets, OpfsAssets, type AssetStore } from "../persist/assets";
 import { serialize } from "../persist/serialize";
 import { addLayer, sequence, setDuration } from "../core/commands";
 import { importSvg } from "../geometry/svgImport";
-import { addShape, newNullLayer, newTextLayer, newImageLayer, newSvgLayers, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
+import { addShape, newNullLayer, newTextLayer, newImageLayer, newSvgLayers, newVideoLayer, nextLayerNumber, MORE_SHAPES, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Graph } from "./Graph";
@@ -336,6 +336,18 @@ export function Editor() {
         <button onClick={() => add("rect")}>Rect</button>
         <button onClick={() => add("ellipse")}>Ellipse</button>
         <button onClick={() => add("star")}>Star</button>
+        <select
+          class="more-shapes"
+          aria-label="More shapes"
+          value=""
+          onChange={(e) => {
+            const k = e.currentTarget.value as ShapeKind;
+            e.currentTarget.value = "";
+            if (k) add(k);
+          }}>
+          <option value="">More…</option>
+          <For each={MORE_SHAPES}>{(m) => <option value={m.kind}>{m.label}</option>}</For>
+        </select>
         <button onClick={addText}>Text</button>
         <button onClick={addNull}>Null</button>
         <button onClick={() => fileInput.click()}>Image</button>
