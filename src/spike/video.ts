@@ -39,6 +39,19 @@ async function readIndex(r: VideoQuadRenderer): Promise<number> {
   return v;
 }
 
+/** True if the middle row of the render contains pixels other than the magenta clear colour. */
+async function drewContent(r: VideoQuadRenderer): Promise<boolean> {
+  const row = await r.readRow(Math.floor(TARGET_H / 2));
+  let other = 0;
+  for (let x = 0; x < TARGET_W; x++) {
+    const R = row[x * 4]!;
+    const G = row[x * 4 + 1]!;
+    const B = row[x * 4 + 2]!;
+    if (!(R > 200 && G < 60 && B > 200)) other++;
+  }
+  return other > TARGET_W * 0.02;
+}
+
 async function openClip(file: File | null) {
   const input = new Input({
     source: file ? new BlobSource(file) : new UrlSource(new URL(CLIP, location.href)),
@@ -87,9 +100,9 @@ async function run() {
     };
     const sink = new VideoSampleSink(track);
 
-    // Is the clip one of ours (frame index encoded)? Check frames 0 and 31 with the first working mode.
-    let workingMode: UploadMode | null = null;
-    const support: Record<string, string> = {};
+    // Probe every upload mode on one frame. For our coded test clip the frame index must read back
+    // exactly. For any other clip we can only check that something other than the clear colour was drawn.
+    const probe: Record<string, { idx?: number; drew?: boolean; error?: string }> = {};
     for (const mode of MODES) {
       status(`Probing upload mode: ${mode}…`);
       try {
@@ -98,24 +111,54 @@ async function run() {
         const f = s.toVideoFrame();
         const renderer = await rendererFor(mode);
         try {
+          if (!result.frameFormat) {
+            result.frameFormat = {
+              format: f.format,
+              display: `${f.displayWidth}x${f.displayHeight}`,
+              colorSpace: JSON.stringify(f.colorSpace),
+              copyToRgbaBytes: (() => {
+                try {
+                  return f.allocationSize({ format: "RGBA" });
+                } catch (e) {
+                  return `throws: ${e instanceof Error ? e.message : String(e)}`;
+                }
+              })(),
+              rgbaBytesExpected: f.displayWidth * f.displayHeight * 4,
+            };
+          }
           await renderer.draw(f, mode);
           await renderer.idle();
-          const idx = await readIndex(renderer);
-          support[mode] = idx === 31 ? "ok (frame index verified)" : `draws, but read index ${idx}, expected 31`;
-          if (idx === 31 && !workingMode) workingMode = mode;
+          probe[mode] = { idx: await readIndex(renderer), drew: await drewContent(renderer) };
         } finally {
           f.close();
           s.close();
         }
       } catch (e) {
         const lost = renderers.get(mode)?.lostReason;
-        support[mode] = `FAILED: ${e instanceof Error ? e.message : String(e)}${lost ? ` [device ${lost}]` : ""}`;
+        probe[mode] = { error: `${e instanceof Error ? e.message : String(e)}${lost ? ` [device ${lost}]` : ""}` };
       }
     }
+    const coded = Object.values(probe).some((p) => p.idx === 31);
+    const support: Record<string, string> = {};
+    let workingMode: UploadMode | null = null;
+    for (const mode of MODES) {
+      const p = probe[mode]!;
+      let ok = false;
+      if (p.error) support[mode] = `FAILED: ${p.error}`;
+      else if (coded) {
+        ok = p.idx === 31;
+        support[mode] = ok ? "ok (frame index verified)" : `WRONG: read index ${p.idx}, expected 31`;
+      } else {
+        ok = !!p.drew;
+        support[mode] = ok
+          ? "ok (picture drawn; frame index not checked because this is not the coded test clip)"
+          : "NOTHING DRAWN: only the clear colour came back";
+      }
+      if (ok && !workingMode) workingMode = mode;
+    }
     result.support = support;
-    const coded = workingMode !== null;
     result.codedClip = coded;
-    if (!coded && !file) throw new Error("No upload mode produced the expected frame; see support");
+    if (!workingMode) throw new Error("No upload mode produced a usable picture; see support");
 
     // Sequential decode only (no GPU): how fast can frames be produced?
     status("Decode throughput…");
@@ -133,7 +176,7 @@ async function run() {
     // Sequential decode + upload + draw per mode.
     result.sequential = {} as Record<string, unknown>;
     for (const mode of MODES) {
-      if (!support[mode]?.startsWith("ok") && !(file && !support[mode]?.startsWith("FAILED"))) continue;
+      if (!support[mode]?.startsWith("ok")) continue;
       status(`Sequential: ${mode}…`);
       const renderer = await rendererFor(mode);
       const uploadMs: number[] = [];
@@ -194,7 +237,13 @@ async function run() {
         f.close();
         s.close();
       }
-      result.seek = { mode: workingMode, seeks: targets.length, latencyMs: stats(lat), wrong };
+      result.seek = {
+        mode: workingMode,
+        seeks: targets.length,
+        latencyMs: stats(lat),
+        frameAccuracy: coded ? (wrong.length === 0 ? "verified: every seek returned the requested frame" : "FAILED") : "not checked (not the coded test clip)",
+        wrong: coded ? wrong : "n/a",
+      };
     }
 
     // Several decoders at once.
