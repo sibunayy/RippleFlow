@@ -1,5 +1,5 @@
 import type { Command } from "./history";
-import type { Composition, Id, Keyframe, Layer, Track, Transform } from "./types";
+import type { BlendMode, Composition, Id, Keyframe, Layer, ShapeContent, Track, Transform } from "./types";
 
 const find = (comp: Composition, id: Id): Layer => {
   const layer = comp.layers.find((l) => l.id === id);
@@ -154,6 +154,32 @@ export function setInOut(id: Id, inPoint: number, outPoint: number): Command {
     apply(comp) {
       if (!(outPoint > inPoint)) throw new Error("outPoint must be after inPoint");
       return replaceLayer(comp, { ...find(comp, id), inPoint, outPoint });
+    },
+  };
+}
+
+/** Change a shape layer's fill, gradient or stroke. `edit` returns the new content (or the same object for no change). */
+export function editShape(id: Id, label: string, edit: (shape: ShapeContent) => ShapeContent): Command {
+  return {
+    label,
+    apply(comp) {
+      const layer = find(comp, id);
+      if (!layer.shape) throw new Error(`Layer ${id} is not a shape`);
+      const next = edit(layer.shape);
+      return next === layer.shape ? comp : replaceLayer(comp, { ...layer, shape: next });
+    },
+  };
+}
+
+/** How the layer combines with what is behind it. */
+export function setBlend(id: Id, blend: BlendMode): Command {
+  return {
+    label: "Blend mode",
+    apply(comp) {
+      const layer = find(comp, id);
+      if ((layer.blend ?? "normal") === blend) return comp;
+      const { blend: _drop, ...rest } = layer;
+      return replaceLayer(comp, blend === "normal" ? rest : { ...rest, blend });
     },
   };
 }

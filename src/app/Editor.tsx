@@ -19,6 +19,7 @@ import type { KeyColumn } from "../editor/keyframeEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Graph } from "./Graph";
 import { Props } from "./Props";
+import { Style } from "./Style";
 import { registerServiceWorker } from "./pwa";
 import { Timeline } from "./Timeline";
 
@@ -40,6 +41,7 @@ export function Editor() {
   const [notice, setNotice] = createSignal<string | null>(null);
   const [exporting, setExporting] = createSignal(false);
   const [projectsOpen, setProjectsOpen] = createSignal(false);
+  const [styleOpen, setStyleOpen] = createSignal(true);
   const [projectId, setProjectId] = createSignal(LEGACY_ID);
   const [update, setUpdate] = createSignal<(() => void) | null>(null);
   const store: ProjectStore = opfsAvailable() ? new OpfsStore() : new MemoryStore();
@@ -304,6 +306,7 @@ export function Editor() {
         <button onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}>Undo</button>
         <button onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}>Redo</button>
         <span class="sep" />
+        <button classList={{ on: styleOpen() }} aria-pressed={styleOpen()} onClick={() => setStyleOpen(!styleOpen())}>Style</button>
         <button onClick={() => { setPlaying(false); setExporting(true); }}>Export</button>
         <span class="build" title="Build">{typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}</span>
         <span class="save" classList={{ bad: saveState() === "error" || saveState() === "unavailable" }}>
@@ -313,6 +316,7 @@ export function Editor() {
           <input type="checkbox" onChange={(e) => (ctrl.autoKey = e.currentTarget.checked)} /> Auto-key
         </label>
       </header>
+      <div class="workspace">
       <div class="stage" ref={stage}>
         <canvas
           ref={canvas}
@@ -355,6 +359,8 @@ export function Editor() {
         <Show when={error()}>
           <p class="error">WebGPU unavailable: {error()}</p>
         </Show>
+      </div>
+      <Style ctrl={ctrl} tick={tick} notify={setNotice} open={styleOpen} />
       </div>
       <Show when={projectsOpen()}>
         <ProjectsDialog

@@ -1,5 +1,5 @@
 import { IDENTITY, type Affine } from "../core/affine";
-import type { ImageContent, Layer, ShapeContent, VideoContent } from "../core/types";
+import type { Gradient, ImageContent, Layer, ShapeContent, VideoContent } from "../core/types";
 import type { Bounds } from "../editor/hitTest";
 import { tessellateFill } from "./fill";
 import { flatten } from "./path";
@@ -17,6 +17,8 @@ export interface ShapePart {
   readonly video?: true;
   /** Mesh to layer-local transform (used to rotate sideways-coded video). Defaults to identity. */
   readonly local?: Affine;
+  /** Paint this gradient over `bbox` instead of the flat color. */
+  readonly gradient?: { readonly gradient: Gradient; readonly bbox: { x: number; y: number; w: number; h: number } };
 }
 
 export interface ShapeGeometry {
@@ -34,7 +36,14 @@ export interface ShapeGeometry {
 export function buildShapeGeometry(shape: ShapeContent, tolerance = 0.1): ShapeGeometry {
   const subpaths = flatten(parseSvgPath(shape.path), tolerance);
   const parts: ShapePart[] = [];
-  if (shape.fill) parts.push({ mesh: tessellateFill(subpaths), color: shape.fill });
+  if (shape.fill || shape.gradient) {
+    const mesh = tessellateFill(subpaths);
+    const color = shape.fill ?? shape.gradient!.stops[0]!.color;
+    if (shape.gradient) {
+      const bb = meshBounds(mesh);
+      parts.push({ mesh, color, gradient: { gradient: shape.gradient, bbox: bb ?? { x: 0, y: 0, w: 1, h: 1 } } });
+    } else parts.push({ mesh, color });
+  }
   if (shape.stroke) {
     const s = shape.stroke;
     parts.push({
@@ -60,6 +69,18 @@ export function buildShapeGeometry(shape: ShapeContent, tolerance = 0.1): ShapeG
   }
   const bounds = minX <= maxX ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : undefined;
   return { parts, bounds };
+}
+
+function meshBounds(mesh: Mesh): { x: number; y: number; w: number; h: number } | undefined {
+  const p = mesh.positions;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let i = 0; i < p.length; i += 2) {
+    minX = Math.min(minX, p[i]!);
+    maxX = Math.max(maxX, p[i]!);
+    minY = Math.min(minY, p[i + 1]!);
+    maxY = Math.max(maxY, p[i + 1]!);
+  }
+  return minX <= maxX ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : undefined;
 }
 
 const MISSING: readonly [number, number, number, number] = [0.4, 0.4, 0.45, 1];

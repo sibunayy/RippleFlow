@@ -1,0 +1,55 @@
+// Usage: node scripts/run-style-ui.mjs "<app url>?debug&noloop"
+// Drives the Style panel and checks pixels, undo and persistence of style edits.
+import { createRequire } from "node:module";
+const { chromium } = createRequire(import.meta.url)("playwright");
+const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
+const errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+await page.goto(process.argv[2]);
+await page.waitForFunction(() => window.__rf);
+await page.waitForTimeout(600);
+const shape = () => page.evaluate(() => JSON.parse(JSON.stringify(window.__rf.ctrl.document.layers[0])));
+const centre = () => page.evaluate(async () => {
+  const { ctrl, renderer } = window.__rf;
+  window.__rf.frame();
+  const r = await renderer.readPixels();
+  const [x, y] = [ctrl.view[4] + ctrl.view[0] * 960, ctrl.view[5] + ctrl.view[3] * 540].map((v) => Math.round(v * devicePixelRatio));
+  const i = (y * r.width + x) * 4; return [...r.data.slice(i, i + 3)];
+});
+await page.getByText("Rect", { exact: true }).click();
+console.log("solid centre:", await centre());
+await page.getByRole("group", { name: "Fill" }).getByText("Linear").click();
+let l = await shape();
+console.log("linear stops:", l.shape.gradient.stops.length, "kind:", l.shape.gradient.kind, "fill kept:", !!l.shape.fill);
+// Colour swatch 2 -> blue via the native input.
+await page.getByLabel("Colour 2", { exact: true }).evaluate((el) => { el.value = "#0000ff"; el.dispatchEvent(new Event("input", { bubbles: true })); });
+console.log("preview doesn't commit:", (await shape()).shape.gradient.stops[1].color.join(","));
+await page.getByLabel("Colour 2", { exact: true }).evaluate((el) => el.dispatchEvent(new Event("change", { bubbles: true })));
+console.log("committed stop 2:", (await shape()).shape.gradient.stops[1].color.join(","));
+await page.getByLabel("Add colour after 1").click();
+console.log("stops after add:", (await shape()).shape.gradient.stops.map((s) => s.offset));
+await page.getByLabel("Remove colour 2").click();
+console.log("stops after remove:", (await shape()).shape.gradient.stops.length);
+await page.getByRole("group", { name: "Fill" }).getByText("Radial").click();
+console.log("radial centre pixel:", await centre());
+await page.getByRole("group", { name: "Blend" }).getByText("Multiply").click();
+console.log("blend:", (await shape()).blend);
+await page.getByRole("group", { name: "Stroke" }).getByRole("button", { name: "Stroke" }).click();
+console.log("stroke:", JSON.stringify((await shape()).shape.stroke));
+const w = page.getByLabel("Width", { exact: true });
+await w.fill("30"); await w.press("Enter");
+console.log("stroke width:", (await shape()).shape.stroke.width);
+await page.getByRole("group", { name: "Join" }).getByText("round").click();
+console.log("join:", (await shape()).shape.stroke.join);
+await page.getByRole("group", { name: "Fill" }).getByText("None").click();
+console.log("fill none:", JSON.stringify((await shape()).shape.fill), (await shape()).shape.gradient);
+for (let i = 0; i < 3; i++) await page.getByText("Undo", { exact: true }).click();
+console.log("after 3 undos fill mode:", (await shape()).shape.gradient?.kind, "stroke:", (await shape()).shape.stroke?.width);
+await page.waitForFunction(() => document.querySelector(".save").textContent === "Saved");
+await page.reload(); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(600);
+l = await shape();
+console.log("after reload:", l.shape.gradient?.kind, l.blend);
+console.log("errors:", errors.length ? errors : "none");
+await browser.close();

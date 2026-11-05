@@ -113,7 +113,7 @@ export class EditorController {
 
   /** Local-space geometry for a layer. Shapes are built once per shape object; image layers are a cheap shared rectangle. */
   geometryOf(id: Id): ShapeGeometry | undefined {
-    const layer = this.document.layers.find((l) => l.id === id);
+    const layer = this.displayed.layers.find((l) => l.id === id);
     if (!layer) return undefined;
     if (layer.image) return buildImageGeometry(layer.image, this.bitmapOf(layer.image.asset));
     if (layer.video) return buildVideoGeometry(layer.video);

@@ -34,9 +34,9 @@ export function drawsFor(
       if (part.video) {
         const m = mediaOf?.(item.id);
         if (!m || (!m.frame && !m.image)) continue;
-        out.push({ mesh: part.mesh, color: part.color, transform, opacity: item.opacity, ...(m.frame ? { frame: m.frame } : { image: m.image! }) });
+        out.push({ mesh: part.mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(m.frame ? { frame: m.frame } : { image: m.image! }) });
       } else {
-        out.push({ mesh: part.mesh, color: part.color, transform, opacity: item.opacity, ...(part.image ? { image: part.image } : {}) });
+        out.push({ mesh: part.mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(part.image ? { image: part.image } : {}), ...(part.gradient ? { gradient: part.gradient } : {}) });
       }
     }
   }
@@ -73,7 +73,7 @@ export class SceneSync {
   sync(target: Target, draws: PlacedDraw[]): "scene" | "transforms" {
     const same =
       draws.length === this.last.length &&
-      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.image === this.last[i]!.image && !d.frame === !this.last[i]!.frame && d.color.every((c, k) => c === this.last[i]!.color[k]));
+      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.image === this.last[i]!.image && d.gradient === this.last[i]!.gradient && d.blend === this.last[i]!.blend && !d.frame === !this.last[i]!.frame && d.color.every((c, k) => c === this.last[i]!.color[k]));
     if (!same) {
       target.setScene(draws);
       this.last = draws;
