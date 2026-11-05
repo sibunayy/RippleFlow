@@ -1,6 +1,6 @@
 import type { Command } from "../core/history";
 import type { Bezier } from "../core/types";
-import type { KeyRef } from "./keyframeEdit";
+import { trackAt, withTrack, type KeyRef } from "./keyframeEdit";
 
 export const PRESETS: readonly { name: string; ease: Bezier | undefined }[] = [
   { name: "Linear", ease: undefined },
@@ -35,20 +35,20 @@ export function setEase(refs: readonly KeyRef[], ease: Bezier | undefined): Comm
       const layers = comp.layers.map((layer) => {
         const mine = refs.filter((r) => r.layerId === layer.id);
         if (mine.length === 0) return layer;
-        let transform = layer.transform;
+        let out = layer;
         for (const prop of new Set(mine.map((r) => r.prop))) {
           const ids = new Set(mine.filter((r) => r.prop === prop).map((r) => r.keyId));
-          const track = transform[prop];
+          const track = trackAt(out, prop)!;
           if (!track.keys.some((k) => ids.has(k.id) && !same(k.ease, next))) continue;
           const keys = track.keys.map((k) => {
             if (!ids.has(k.id) || same(k.ease, next)) return k;
             const { ease: _old, ...rest } = k;
             return next ? { ...rest, ease: next } : rest;
           });
-          transform = { ...transform, [prop]: { keys } };
+          out = withTrack(out, prop, { keys });
           changed = true;
         }
-        return transform === layer.transform ? layer : { ...layer, transform };
+        return out;
       });
       return changed ? { ...comp, layers } : comp;
     },

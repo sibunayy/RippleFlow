@@ -61,3 +61,24 @@ describe("deleteKeys and snapToFrame", () => {
     expect(snapToFrame(1.01, 30)).toBeCloseTo(1, 5);
   });
 });
+
+describe("effect and trim keys", () => {
+  const rich: Layer = {
+    ...layer,
+    effects: [{ id: "fx1", type: "blur", values: { radius: tr([0, 0], [1, 20]) } }],
+    shape: { path: "M0 0L10 0", trim: { start: tr([0, 0]), end: tr([0, 0], [2, 1]) } },
+  };
+  const c: Composition = { ...comp(), layers: [rich] };
+  it("shows them as diamonds", () => {
+    const cols = keyColumns(rich);
+    expect(cols.flatMap((x) => x.refs.map((r) => r.prop))).toEqual(expect.arrayContaining(["fx:fx1:radius", "trim:end", "trim:start"]));
+    expect(isAnimated({ ...rich, transform: { ...rich.transform, x: empty, y: empty, rotation: empty } })).toBe(true);
+  });
+  it("moves and deletes them", () => {
+    const col = keyColumns(rich).find((x) => x.t === 1 && x.refs.some((r) => r.prop === "fx:fx1:radius"))!;
+    const moved = moveKeys(col.refs.filter((r) => r.prop === "fx:fx1:radius"), 0.5).apply(c).layers[0]!;
+    expect(moved.effects![0]!.values.radius!.keys.map((k) => k.t)).toEqual([0, 1.5]);
+    const gone = deleteKeys(keyColumns(rich).filter((x) => x.t === 2).flatMap((x) => x.refs.filter((r) => r.prop === "trim:end"))).apply(c).layers[0]!;
+    expect(gone.shape!.trim!.end.keys.map((k) => k.t)).toEqual([0]);
+  });
+});

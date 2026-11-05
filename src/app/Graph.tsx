@@ -3,7 +3,7 @@ import { cubicBezier } from "../core/easing";
 import type { Bezier } from "../core/types";
 import type { EditorController } from "../editor/controller";
 import { PRESETS, setEase } from "../editor/easingEdit";
-import type { KeyColumn } from "../editor/keyframeEdit";
+import { trackAt, type KeyColumn } from "../editor/keyframeEdit";
 
 const SIZE = 240;
 const PAD = 28;
@@ -29,7 +29,8 @@ export function Graph(props: { ctrl: EditorController; tick: () => number; picke
     const col = props.picked();
     const ref = col?.refs[0];
     if (!ref) return undefined;
-    return props.ctrl.document.layers.find((l) => l.id === ref.layerId)?.transform[ref.prop].keys.find((k) => k.id === ref.keyId)?.ease;
+    const layer = props.ctrl.document.layers.find((l) => l.id === ref.layerId);
+    return layer ? trackAt(layer, ref.prop)?.keys.find((k) => k.id === ref.keyId)?.ease : undefined;
   };
   const ease = (): Bezier => live() ?? stored() ?? LINEAR;
 
