@@ -4,6 +4,6 @@ import solid from "vite-plugin-solid";
 export default defineConfig({
   plugins: [solid()],
   base: "./",
-  build: { rollupOptions: { input: { main: "index.html", spike: "spike.html", export: "export.html" } } },
+  build: { rollupOptions: { input: { main: "index.html", spike: "spike.html", export: "export.html", video: "video.html" } } },
   test: { environment: "node", include: ["src/**/*.test.ts"] },
 });
