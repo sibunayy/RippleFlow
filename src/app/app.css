@@ -115,6 +115,7 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .node { fill: #fff; stroke: #4aa3ff; stroke-width: 2; }
 .node.selected { fill: #4aa3ff; stroke: #fff; }
 .node-handle { fill: #ffd24a; stroke: #1a1a1f; stroke-width: 1.5; }
+.pen-path { fill: #4aa3ff22; stroke: #4aa3ff; stroke-width: 2; stroke-dasharray: 6 4; }
 .node-arm { stroke: #ffd24a; stroke-width: 1.5; }
 .nodebar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 6px; background: #24242bee; border-radius: 12px; z-index: 2; white-space: nowrap; }
 .nodebar button { min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 14px; }

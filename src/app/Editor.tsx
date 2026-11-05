@@ -290,6 +290,8 @@ export function Editor() {
 
   const corners = () => (tick(), ctrl.pointEdit && ctrl.nodeOverlay() ? null : selectionCorners(ctrl));
   const nodeView = () => (tick(), ctrl.nodeOverlay());
+  const penView = () => (tick(), ctrl.penOverlay());
+  const penning = () => (tick(), ctrl.penTarget !== null);
   const canEditPoints = () => (tick(), !!ctrl.document.layers.find((l) => l.id === ctrl.selection)?.shape);
 
   return (
@@ -308,6 +310,7 @@ export function Editor() {
         <button onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}>Undo</button>
         <button onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}>Redo</button>
         <span class="sep" />
+        <button classList={{ on: penning() }} aria-pressed={penning()} onClick={() => (penning() ? ctrl.cancelPen() : ctrl.startPen({ kind: "shape" }))}>Pen</button>
         <button classList={{ on: (tick(), ctrl.pointEdit) }} aria-pressed={(tick(), ctrl.pointEdit)} disabled={!canEditPoints()} onClick={() => ctrl.setPointEdit(!ctrl.pointEdit)}>Points</button>
         <button classList={{ on: styleOpen() }} aria-pressed={styleOpen()} onClick={() => setStyleOpen(!styleOpen())}>Style</button>
         <button onClick={() => { setPlaying(false); setExporting(true); }}>Export</button>
@@ -339,6 +342,22 @@ export function Editor() {
               </>
             )}
           </Show>
+          <Show when={penView()}>
+            {(v) => (
+              <>
+                <path d={v().d} class="pen-path" />
+                {v().handles.map((h) => (
+                  <>
+                    <line x1={h.fromX} y1={h.fromY} x2={h.x} y2={h.y} class="node-arm" />
+                    <circle cx={h.x} cy={h.y} r="7" class="node-handle" />
+                  </>
+                ))}
+                {v().nodes.map((n) => (
+                  <rect x={n.x - 6} y={n.y - 6} width="12" height="12" class="node" classList={{ selected: n.first }} />
+                ))}
+              </>
+            )}
+          </Show>
           <Show when={nodeView()}>
             {(v) => (
               <>
@@ -355,6 +374,15 @@ export function Editor() {
             )}
           </Show>
         </svg>
+        <Show when={penning()}>
+          <div class="nodebar">
+            <button disabled={(tick(), ctrl.penPoints === 0)} onClick={() => ctrl.undoPenPoint()}>Undo point</button>
+            <button disabled={(tick(), ctrl.penPoints < 2)} onClick={() => ctrl.finishPen(false)}>Done</button>
+            <button disabled={(tick(), ctrl.penPoints < 3)} onClick={() => ctrl.finishPen(true)}>Close</button>
+            <button onClick={() => ctrl.cancelPen()}>Cancel</button>
+            <span class="hint">{(tick(), ctrl.penTarget?.kind === "mask" ? "Drawing a mask: tap points, drag for curves" : "Tap points, drag for curves, tap the first point to close")}</span>
+          </div>
+        </Show>
         <Show when={nodeView()}>
           <div class="nodebar">
             <button disabled={(tick(), ctrl.selectedNodeSmooth() === null)} onClick={() => ctrl.nodeAction("smooth")} classList={{ on: (tick(), ctrl.selectedNodeSmooth() === true) }}>Smooth</button>

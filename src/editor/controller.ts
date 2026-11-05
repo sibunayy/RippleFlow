@@ -1,4 +1,4 @@
-import { apply, invert, multiply, scale, translate, type Affine } from "../core/affine";
+import { apply, invert, maxScale, multiply, scale, translate, type Affine } from "../core/affine";
 import { History, type Command } from "../core/history";
 import { evaluateScene, type SceneItem } from "../core/scene";
 import type { Composition, Id, Mask, VideoContent } from "../core/types";
@@ -10,8 +10,11 @@ import type { FrameRef } from "../video/videoLibrary";
 import { buildImageGeometry, buildShapeGeometry, buildVideoGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
 import { TwoFingerGesture } from "../input/twoFingerGesture";
 import { applyWorldDelta, transformLayer } from "./transformEdit";
-import { editShape, patchMask } from "../core/commands";
-import { deleteNode, isSmooth, nodesToPath, parseNodes, setCorner, setSmooth, type NodePath } from "../geometry/nodes";
+import { addLayer, addMask, editShape, patchMask } from "../core/commands";
+import { newPathLayer, nextLayerNumber } from "../app/shapes";
+import { newMask } from "./maskEdit";
+import { PenTool } from "./penTool";
+import { deleteNode, isSmooth, nodesToPath, parseNodes, setCorner, setSmooth, transformPath, type NodePath } from "../geometry/nodes";
 import { NodeTool, type NodeContext, type NodeOutput, type NodeSel } from "./nodeTool";
 import { SelectTool, type ToolContext, type ToolOutput } from "./selectTool";
 import type { Bounds } from "./hitTest";
@@ -24,6 +27,8 @@ export interface PointerInput {
   readonly y: number;
   readonly shift?: boolean;
 }
+
+export type PenTarget = { kind: "shape" } | { kind: "mask"; layerId: Id };
 
 /**
  * Everything the editor UI needs, with no DOM or GPU: document + history,
@@ -42,6 +47,8 @@ export class EditorController {
   private readonly nodeTool = new NodeTool();
   private pointEditOn = false;
   private pointMaskId: string | null = null;
+  private readonly pen = new PenTool();
+  private penTargetState: PenTarget | null = null;
   private parsed: { d: string; paths: NodePath[] } | null = null;
 
   /** Playhead, seconds. */
@@ -117,6 +124,91 @@ export class EditorController {
   setSelection(id: Id | null): void {
     if (id !== this.tool.selection) this.nodeTool.setSelection(null);
     this.tool.setSelection(id);
+    this.emit();
+  }
+
+  // ---- Pen tool ----------------------------------------------------------
+
+  /** What the pen is drawing: a new shape layer, or a mask on a layer. Null when the pen is off. */
+  get penTarget(): PenTarget | null {
+    return this.penTargetState;
+  }
+  get penPoints(): number {
+    return this.pen.count;
+  }
+  startPen(target: PenTarget): void {
+    this.pen.clear();
+    this.penTargetState = target;
+    this.setPointEdit(false);
+  }
+  cancelPen(): void {
+    this.pen.clear();
+    this.penTargetState = null;
+    this.emit();
+  }
+  undoPenPoint(): void {
+    this.pen.popPoint();
+    this.emit();
+  }
+
+  /** Matrix from the space the pen's points live in to the composition (identity for new shapes). */
+  private penSpace(): Affine | null {
+    const t = this.penTargetState;
+    if (!t) return null;
+    if (t.kind === "shape") return [1, 0, 0, 1, 0, 0];
+    return evaluateScene(this.document, this.time).find((i) => i.id === t.layerId)?.matrix ?? null;
+  }
+
+  /** Turn what has been drawn into a layer or mask. Masks are always closed. */
+  finishPen(closed: boolean): void {
+    const t = this.penTargetState;
+    const nodes = this.pen.path.nodes;
+    if (!t || nodes.length < (closed || t.kind === "mask" ? 3 : 2)) {
+      this.cancelPen();
+      return;
+    }
+    this.pen.clear();
+    this.penTargetState = null;
+    if (t.kind === "shape") {
+      const layer = newPathLayer(nextLayerNumber(this.document.layers), { nodes, closed });
+      if (layer) {
+        this.execute(addLayer(layer));
+        this.setSelection(layer.id);
+        return;
+      }
+    } else {
+      const id = `mask${Date.now().toString(36)}${Math.random().toString(36).slice(2, 4)}`;
+      this.execute(addMask(t.layerId, newMask(id, nodesToPath([{ nodes, closed: true }]))));
+      return;
+    }
+    this.emit();
+  }
+
+  /** The path being drawn in canvas pixels, for the overlay. */
+  penOverlay(): { d: string; nodes: { x: number; y: number; first: boolean }[]; handles: { x: number; y: number; fromX: number; fromY: number }[] } | null {
+    const m = this.penSpace();
+    if (!m || this.pen.count === 0) return null;
+    const screen = transformPath(this.pen.path, multiply(this.view, m));
+    const nodes = screen.nodes.map((n, i) => ({ x: n.x, y: n.y, first: i === 0 }));
+    const last = screen.nodes[screen.nodes.length - 1]!;
+    const handles: { x: number; y: number; fromX: number; fromY: number }[] = [];
+    if (last.ox || last.oy) handles.push({ fromX: last.x, fromY: last.y, x: last.x + last.ox, y: last.y + last.oy });
+    if (last.ix || last.iy) handles.push({ fromX: last.x, fromY: last.y, x: last.x + last.ix, y: last.y + last.iy });
+    return { d: nodesToPath([screen]), nodes, handles };
+  }
+
+  private penEvent(kind: "down" | "move" | "up", p: PointerInput): void {
+    const m = this.penSpace();
+    const inv = m ? invert(m) : null;
+    if (!m || !inv) return;
+    const [cx, cy] = this.screenToComp(p.x, p.y);
+    const [x, y] = apply(inv, cx, cy);
+    const k = Math.hypot(this.view[0], this.view[1]);
+    const unitsPerPx = (k > 0 ? 1 / k : 1) / Math.max(maxScale(m), 1e-9);
+    if (kind === "down") {
+      if (this.pen.down(p.id, x, y, unitsPerPx).closed) return this.finishPen(true);
+    } else if (kind === "move") this.pen.move(p.id, x, y, unitsPerPx);
+    else this.pen.up(p.id);
     this.emit();
   }
 
@@ -299,6 +391,7 @@ export class EditorController {
       this.gesture.down(p.id, p.x, p.y);
       return;
     }
+    if (this.penTargetState) return this.penEvent("down", p);
     const pl = this.pointLayer();
     const nc = pl ? this.nodeContext(pl) : null;
     if (pl && nc) {
@@ -318,6 +411,7 @@ export class EditorController {
       }
       return;
     }
+    if (this.penTargetState) return this.penEvent("move", p);
     if (this.nodeTool.dragging) return this.nodeEvent("move", p);
     this.route(this.tool.move(p.id, this.toolEvent(p), this.toolContext()));
   }
@@ -327,6 +421,7 @@ export class EditorController {
       this.gesture.up(p.id);
       return;
     }
+    if (this.penTargetState) return this.penEvent("up", p);
     if (this.nodeTool.dragging) return this.nodeEvent("up", p);
     this.route(this.tool.up(p.id, this.toolEvent(p), this.toolContext()));
   }
