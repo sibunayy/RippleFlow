@@ -132,3 +132,13 @@ export function newPathLayer(n: number, path: NodePath): Layer | null {
     },
   };
 }
+
+/** An empty layer with a transform and nothing to draw: parent other layers to it to move them together. */
+export function newNullLayer(n: number, compW: number, compH: number): Layer {
+  return {
+    id: `layer-${n}`,
+    name: `Null ${n}`,
+    kind: "shape",
+    transform: { anchorX: empty, anchorY: empty, x: still(compW / 2), y: still(compH / 2), scaleX: empty, scaleY: empty, rotation: empty, opacity: empty },
+  };
+}

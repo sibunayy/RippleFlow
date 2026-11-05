@@ -74,6 +74,8 @@ Effects: `Layer.effects` stack (blur, drop shadow, glow, noise, levels, brightne
 
 Masks and mattes: `Layer.masks` (add/subtract/intersect, feather, opacity, invert; static layer-local paths, point-editable) and `Layer.matte` (alpha/luma, normal/inverted) plus `Layer.hidden`. They use the same group path as effects: masks, then effects, then matte, then composite (`GroupInfo.masks/matte`, draws tagged `role`). `evaluateScene` embeds the matte source's own SceneItem. Style panel > Compositing (`src/app/Compositing.tsx`). Pixel tests: `scripts/run-matte.mjs`, UI: `run-matte-ui.mjs`.
 
+Null layers and parenting: toolbar Null adds an empty transform layer; Props "Parent" picker parents any layer to another (cycles not offered; transform only, opacity is not inherited). Script `scripts/run-parent.mjs`. No group/pre-comp yet.
+
 Not built: SVG import, text, audio (video clips export silent), composition size/fps UI, slipping/moving a clip on the timeline.
 
 Not verified anywhere: the `importExternalTexture` video draw inside the real editor (the container's software GPU destroys the device on it, so tests use `?videoMode=bitmap`; the iPad spike did verify external textures standalone). Not verified on the iPad (only the user can): Pencil feel and hit-target sizes in the editor, 1080p60 export speed and heat on a real scene, share sheet to Photos, standalone (home-screen) behaviour, palm rejection with a resting palm, HEVC/4K phone clips. Do not claim these work.

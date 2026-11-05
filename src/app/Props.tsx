@@ -1,4 +1,6 @@
 import { For, Show } from "solid-js";
+import { setParent } from "../core/commands";
+import type { Layer } from "../core/types";
 import type { EditorController } from "../editor/controller";
 import { propValue, setPropValue, type EditableProp } from "../editor/transformEdit";
 import { ScrubField } from "./ScrubField";
@@ -31,6 +33,18 @@ export function Props(props: { ctrl: EditorController; tick: () => number }) {
       {(l) => (
         <div class="props">
           <strong class="props-name">{l().name}</strong>
+          <label class="parent-pick">
+            <span class="scrub-label">Parent</span>
+            <select
+              value={l().parent ?? ""}
+              onChange={(e) => props.ctrl.execute(setParent(l().id, e.currentTarget.value || undefined))}
+            >
+              <option value="">None</option>
+              <For each={props.ctrl.document.layers.filter((o) => o.id !== l().id && !descendsFrom(props.ctrl.document.layers, o, l().id))}>
+                {(o) => <option value={o.id} selected={l().parent === o.id}>{o.name}</option>}
+              </For>
+            </select>
+          </label>
           <For each={FIELDS}>
             {(f) => {
               const cmd = (v: number) => setPropValue(l().id, f.prop, v / f.mul, props.ctrl.time, props.ctrl.autoKey);
@@ -54,4 +68,13 @@ export function Props(props: { ctrl: EditorController; tick: () => number }) {
       )}
     </Show>
   );
+}
+
+/** True when `layer` is `ancestor` or sits below it in the parent chain (so it can't become its parent). */
+function descendsFrom(layers: readonly Layer[], layer: Layer, ancestor: string): boolean {
+  const byId = new Map(layers.map((x) => [x.id, x]));
+  for (let cur: Layer | undefined = layer, n = 0; cur && n <= layers.length; n++, cur = cur.parent ? byId.get(cur.parent) : undefined) {
+    if (cur.id === ancestor) return true;
+  }
+  return false;
 }
