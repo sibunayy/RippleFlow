@@ -23,9 +23,10 @@ describe("buildDraws", () => {
     const c = make();
     c.view = [2, 0, 0, 2, 10, 20];
     const d = buildDraws(c, 2);
-    expect(d).toHaveLength(2);
-    expect(d[0]!.color).toEqual([1, 0, 0, 1]);
-    expect(d[0]!.transform).toEqual([4, 0, 0, 4, 20, 40]);
+    expect(d).toHaveLength(3); // backdrop, fill, stroke
+    expect(d[0]!.color).toEqual([1, 1, 1, 1]); // default white backdrop
+    expect(d[1]!.color).toEqual([1, 0, 0, 1]);
+    expect(d[1]!.transform).toEqual([4, 0, 0, 4, 20, 40]);
   });
 });
 
@@ -38,7 +39,7 @@ describe("SceneSync", () => {
     c.view = [3, 0, 0, 3, 0, 0];
     expect(s.sync(t, buildDraws(c, 1))).toBe("transforms");
     expect(t.setScene).toHaveBeenCalledTimes(1);
-    expect(t.setTransform).toHaveBeenCalledTimes(2);
+    expect(t.setTransform).toHaveBeenCalledTimes(3);
   });
 });
 

@@ -8,6 +8,8 @@ export interface ExportConfig {
   /** Bits per second. */
   bitrate: number;
   keyframeEverySec?: number;
+  /** Abort the export between frames; the promise rejects with the signal's reason. */
+  signal?: AbortSignal;
   /** Max frames queued inside the encoder before we wait. */
   maxQueue?: number;
 }
@@ -114,7 +116,9 @@ export async function exportMp4(
   let backpressureMs = 0;
   let maxQueueSeen = 0;
 
+  try {
   for (let i = 0; i < total; i++) {
+    cfg.signal?.throwIfAborted();
     if (encodeError) throw encodeError;
 
     const w0 = performance.now();
@@ -140,6 +144,10 @@ export async function exportMp4(
 
   await encoder.flush();
   if (encodeError) throw encodeError;
+  } catch (e) {
+    if (encoder.state !== "closed") encoder.close();
+    throw e;
+  }
   encoder.close();
   muxer.finalize();
   const wallMs = performance.now() - start;

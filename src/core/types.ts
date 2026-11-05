@@ -69,6 +69,8 @@ export interface Layer {
 }
 
 export interface Composition {
+  /** Straight RGBA 0..1 behind all layers. Defaults to white. */
+  readonly background?: Rgba;
   readonly width: number;
   readonly height: number;
   readonly fps: number;

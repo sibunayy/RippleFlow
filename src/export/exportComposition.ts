@@ -1,0 +1,91 @@
+import { scale } from "../core/affine";
+import { evaluateScene } from "../core/scene";
+import type { Composition, Id } from "../core/types";
+import { buildShapeGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
+import { MeshRenderer } from "../render/meshRenderer";
+import { backgroundDraw, DEFAULT_BACKGROUND, drawsFor, SceneSync } from "../app/sceneDraws";
+import { exportMp4, type ExportResult } from "./encodeMp4";
+
+export interface ExportPreset {
+  readonly id: string;
+  readonly label: string;
+  readonly height: number;
+  readonly fps: number;
+  /** Bits per second. */
+  readonly bitrate: number;
+}
+
+/** 1080p60 at 12 Mbps was measured at 156 fps encode on the target iPad (docs/phase0-results.md). */
+export const PRESETS: readonly ExportPreset[] = [
+  { id: "720p30", label: "720p · 30 fps", height: 720, fps: 30, bitrate: 5_000_000 },
+  { id: "1080p30", label: "1080p · 30 fps", height: 1080, fps: 30, bitrate: 8_000_000 },
+  { id: "1080p60", label: "1080p · 60 fps", height: 1080, fps: 60, bitrate: 12_000_000 },
+];
+
+const even = (n: number) => Math.max(2, Math.round(n / 2) * 2); // H.264 4:2:0 needs even dimensions
+
+/** Output pixel size for a preset, keeping the composition's aspect ratio. */
+export function exportSize(comp: Composition, preset: ExportPreset): { width: number; height: number } {
+  return { width: even((preset.height * comp.width) / comp.height), height: even(preset.height) };
+}
+
+export interface ExportOptions {
+  readonly preset: ExportPreset;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (done: number, total: number) => void;
+}
+
+/**
+ * Render the composition frame by frame on a dedicated offscreen renderer and
+ * encode it to MP4. Uses the same evaluateScene and draw building as the
+ * editor, so what you see is what is exported. Always releases GPU resources.
+ */
+export async function exportComposition(comp: Composition, opts: ExportOptions): Promise<ExportResult> {
+  const { width, height } = exportSize(comp, opts.preset);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const renderer = await MeshRenderer.create(canvas);
+  const readback = renderer.createReadback();
+  try {
+    const bg = comp.background ?? DEFAULT_BACKGROUND;
+    renderer.clearColor = { r: bg[0], g: bg[1], b: bg[2], a: 1 };
+
+    const geometry = new Map<Id, ShapeGeometry | undefined>();
+    for (const l of comp.layers) if (l.shape) geometry.set(l.id, buildShapeGeometry(l.shape));
+    const toDevice = scale(width / comp.width, height / comp.height);
+    const sync = new SceneSync();
+    const bgra = renderer.format === "bgra8unorm";
+
+    return await exportMp4(
+      {
+        width,
+        height,
+        fps: opts.preset.fps,
+        durationSec: comp.duration,
+        bitrate: opts.preset.bitrate,
+        keyframeEverySec: 1, // short GOPs keep the file quick to scrub in other apps
+        signal: opts.signal,
+      },
+      async (index, timestamp, duration) => {
+        const t = index / opts.preset.fps;
+        const draws = [backgroundDraw(comp, toDevice), ...drawsFor(evaluateScene(comp, t), (id) => geometry.get(id), toDevice)];
+        sync.sync(renderer, draws);
+        const data = await readback.read();
+        return new VideoFrame(data, {
+          format: bgra ? "BGRA" : "RGBA",
+          codedWidth: width,
+          codedHeight: height,
+          timestamp,
+          duration,
+          layout: [{ offset: 0, stride: readback.bytesPerRow }],
+        });
+      },
+      opts.onProgress,
+    );
+  } finally {
+    readback.destroy();
+    renderer.destroy();
+  }
+}
+

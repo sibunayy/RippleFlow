@@ -57,3 +57,16 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .notice { top: 12px; bottom: auto; background: #5a4a1f; }
 .update { background: #1f3f5a; }
 .update button { min-height: 40px; margin-left: 8px; padding: 0 14px; border: 0; border-radius: 8px; background: #4aa3ff; color: #08121e; font-weight: 600; }
+.modal { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: #000a; padding: 16px; }
+.sheet { width: min(460px, 100%); max-height: 100%; overflow: auto; padding: 18px; background: #24242b; border-radius: 16px; box-shadow: 0 10px 40px #000a; }
+.sheet h2 { margin: 0 0 12px; font-size: 18px; }
+.sheet p { margin: 10px 0; line-height: 1.4; }
+.sheet progress { width: 100%; height: 14px; }
+.sheet .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0; }
+.sheet button, .sheet .btn { min-height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: #34343e; color: inherit; font-size: 15px; display: inline-flex; align-items: center; text-decoration: none; }
+.sheet button.on { outline: 2px solid #4aa3ff; }
+.sheet button.primary { background: #4aa3ff; color: #08121e; font-weight: 600; }
+.sheet button:disabled { opacity: 0.4; }
+.sheet .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+.sheet .warn { color: #ff9a8a; }
+.sheet .preview { width: 100%; border-radius: 8px; background: #000; }

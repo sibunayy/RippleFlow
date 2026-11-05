@@ -162,6 +162,18 @@ export class MeshRenderer {
   }
 
   /** Create a reusable readback target for the current canvas size. */
+  /** Release GPU resources. The renderer is unusable afterwards. */
+  destroy(): void {
+    for (const p of this.prepared) {
+      p.vbuf.destroy();
+      p.ibuf.destroy();
+      p.ubuf.destroy();
+    }
+    this.prepared = [];
+    this.msaa?.destroy();
+    this.gpu.device.destroy();
+  }
+
   createReadback(): FrameReadback {
     return new FrameReadback(this.gpu.device, this.gpu.format, this.canvas.width, this.canvas.height, (enc, tex, w, h) =>
       this.encode(enc, tex, w, h),
