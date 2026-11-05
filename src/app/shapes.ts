@@ -42,3 +42,13 @@ export function newShapeLayer(kind: ShapeKind, n: number, compW: number, compH: 
 }
 
 export const addShape = (kind: ShapeKind, n: number, w: number, h: number): Command => addLayer(newShapeLayer(kind, n, w, h));
+
+/** Next unused "layer-N" number, so ids stay unique after loading a saved project. */
+export function nextLayerNumber(layers: readonly { id: string }[]): number {
+  let max = 0;
+  for (const l of layers) {
+    const m = /^layer-(\d+)$/.exec(l.id);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return max + 1;
+}

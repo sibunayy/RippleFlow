@@ -52,3 +52,6 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .g-handle { fill: #fff; stroke: #4aa3ff; stroke-width: 3; touch-action: none; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .presets button { min-height: 40px; padding: 0 10px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 13px; }
+.save { margin-left: auto; font-size: 13px; opacity: 0.7; white-space: nowrap; }
+.save.bad { color: #ff9a8a; opacity: 1; }
+.notice { top: 12px; bottom: auto; background: #5a4a1f; }
