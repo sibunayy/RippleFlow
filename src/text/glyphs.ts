@@ -16,15 +16,17 @@ export interface TextLayout {
   readonly units: readonly LaidOutUnit[];
 }
 
-let loaded: Font | undefined;
+export const DEFAULT_FONT = "inter";
+const loaded = new Map<string, Font>();
 
-/** Parse and remember the font used for all text. Call once at startup (or in a test). */
-export function setFontData(data: ArrayBuffer): void {
-  loaded = parse(data);
+/** Parse and remember a font under `id` (the default font when omitted). Call at startup, when a font is picked, or in a test. */
+export function setFontData(data: ArrayBuffer, id: string = DEFAULT_FONT): void {
+  loaded.set(id, parse(data));
 }
 
-export function fontLoaded(): boolean {
-  return loaded !== undefined;
+/** Whether the font a text layer uses (default: Inter) is ready to lay out. */
+export function fontLoaded(id: string = DEFAULT_FONT): boolean {
+  return loaded.has(id);
 }
 
 interface PlacedChar {
@@ -38,7 +40,7 @@ interface PlacedChar {
 type Glyph = ReturnType<Font["charToGlyph"]>;
 
 /** Lay out the text with the loaded font. Top-left of the first line's em box is (0, 0). */
-export function layoutText(content: TextContent, font: Font | undefined = loaded): TextLayout {
+export function layoutText(content: TextContent, font: Font | undefined = loaded.get(content.font ?? DEFAULT_FONT)): TextLayout {
   if (!font) return { path: "", units: [] };
   const k = content.size / font.unitsPerEm;
   const lineHeight = content.size * 1.2;

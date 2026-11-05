@@ -1,14 +1,4 @@
-import fontUrl from "./fonts/Inter-Bold.ttf?url";
-import { setFontData } from "./glyphs";
+import { ensureFont } from "./fonts";
 
-/** Fetch and parse the bundled font. Resolves false (never throws) if it cannot be loaded, so the app still opens. */
-export async function loadBundledFont(): Promise<boolean> {
-  try {
-    const res = await fetch(fontUrl);
-    if (!res.ok) return false;
-    setFontData(await res.arrayBuffer());
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** Fetch and parse the default font. Resolves false (never throws) if it cannot be loaded, so the app still opens. */
+export const loadBundledFont = (): Promise<boolean> => ensureFont();

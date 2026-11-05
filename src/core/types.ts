@@ -195,6 +195,8 @@ export interface TextContent {
   /** Extra space between characters, in text units. */
   readonly tracking: number;
   readonly align: "left" | "center" | "right";
+  /** Font id from `text/fonts.ts`; absent means the default (Inter Bold). */
+  readonly font?: string;
   readonly animator?: TextAnimator;
 }
 

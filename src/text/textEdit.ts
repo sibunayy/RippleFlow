@@ -2,7 +2,7 @@ import { editLayer } from "../core/commands";
 import type { Command } from "../core/history";
 import { DEFAULT_ANIMATOR } from "../core/text";
 import type { Layer, TextAnimator, TextContent } from "../core/types";
-import { layoutText } from "./glyphs";
+import { fontLoaded, layoutText } from "./glyphs";
 
 /** Change a text layer's words or look; the stored outline is rebuilt to match. */
 export function editText(id: string, label: string, patch: (t: TextContent) => TextContent): Command {
@@ -10,6 +10,7 @@ export function editText(id: string, label: string, patch: (t: TextContent) => T
     if (!layer.text || !layer.shape) throw new Error(`Layer ${id} is not a text layer`);
     const next = patch(layer.text);
     if (next === layer.text) return layer;
+    if (!fontLoaded(next.font)) throw new Error("Font is still loading");
     return { ...layer, text: next, shape: { ...layer.shape, path: layoutText(next).path } };
   });
 }
