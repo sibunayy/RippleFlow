@@ -18,11 +18,24 @@ export interface Track {
   readonly keys: readonly Keyframe[];
 }
 
+/**
+ * After Effects-style layer transform. Defaults when a track has no keys:
+ * anchor 0, position 0, scale 1, rotation 0, opacity 1.
+ * Local matrix = translate(position) * rotate(rotation) * scale(scale) * translate(-anchor).
+ */
 export interface Transform {
+  /** Point in the layer's own coordinates that position and rotation act on. */
+  readonly anchorX: Track;
+  readonly anchorY: Track;
+  /** Where the anchor lands, in the parent's coordinates (or the composition if no parent). */
   readonly x: Track;
   readonly y: Track;
+  /** 1 = 100%. */
+  readonly scaleX: Track;
+  readonly scaleY: Track;
+  /** Degrees, clockwise. */
   readonly rotation: Track;
-  readonly scale: Track;
+  /** 0..1. Not inherited from the parent. */
   readonly opacity: Track;
 }
 

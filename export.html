@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>RippleFlow spike: export</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      #wrap { padding: 16px; max-width: 720px; }
+      label { display: block; margin: 10px 0 4px; font-size: 14px; }
+      select, input { font-size: 16px; padding: 8px; min-width: 160px; }
+      button { font-size: 18px; padding: 14px 22px; margin: 16px 8px 8px 0; border-radius: 10px; border: 0; background: #2a5bd7; color: #fff; }
+      button:disabled { opacity: 0.5; }
+      canvas { width: 240px; height: auto; border-radius: 8px; border: 1px solid #8884; display: block; margin-top: 12px; }
+      video { width: 100%; max-width: 480px; margin-top: 12px; border-radius: 8px; }
+      pre { font-size: 13px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <h2>Export spike</h2>
+      <label>Size
+        <select id="size">
+          <option value="1920x1080" selected>1920×1080</option>
+          <option value="1280x720">1280×720</option>
+          <option value="1080x1920">1080×1920 (vertical)</option>
+          <option value="1080x1080">1080×1080</option>
+        </select>
+      </label>
+      <label>Frame rate
+        <select id="fps"><option>30</option><option selected>60</option></select>
+      </label>
+      <label>Duration (seconds) <input id="dur" type="number" value="10" min="1" max="120" /></label>
+      <label>Bitrate (Mbps) <input id="mbps" type="number" value="12" min="1" max="60" /></label>
+      <label>Frame source
+        <select id="mode">
+          <option value="canvas" selected>Canvas to VideoFrame</option>
+          <option value="readback">GPU readback to VideoFrame</option>
+        </select>
+      </label>
+      <button id="run">Run export</button>
+      <div id="progress"></div>
+      <canvas id="c" width="1920" height="1080"></canvas>
+      <pre id="out"></pre>
+      <div id="result"></div>
+    </div>
+    <script type="module" src="/src/spike/export.ts"></script>
+  </body>
+</html>
