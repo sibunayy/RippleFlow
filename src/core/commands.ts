@@ -1,5 +1,5 @@
 import type { Command } from "./history";
-import type { BlendMode, Composition, Id, Keyframe, Layer, ShapeContent, Track, Transform } from "./types";
+import type { BlendMode, Composition, Effect, Id, Keyframe, Layer, ShapeContent, Track, Transform } from "./types";
 
 const find = (comp: Composition, id: Id): Layer => {
   const layer = comp.layers.find((l) => l.id === id);
@@ -180,6 +180,64 @@ export function setBlend(id: Id, blend: BlendMode): Command {
       if ((layer.blend ?? "normal") === blend) return comp;
       const { blend: _drop, ...rest } = layer;
       return replaceLayer(comp, blend === "normal" ? rest : { ...rest, blend });
+    },
+  };
+}
+
+/** Append an effect to the layer's stack. */
+export function addEffect(layerId: Id, effect: Effect): Command {
+  return {
+    label: "Add effect",
+    apply(comp) {
+      const layer = find(comp, layerId);
+      if ((layer.effects ?? []).some((e) => e.id === effect.id)) throw new Error(`Effect ${effect.id} already exists`);
+      return replaceLayer(comp, { ...layer, effects: [...(layer.effects ?? []), effect] });
+    },
+  };
+}
+
+export function removeEffect(layerId: Id, effectId: Id): Command {
+  return {
+    label: "Remove effect",
+    apply(comp) {
+      const layer = find(comp, layerId);
+      const effects = (layer.effects ?? []).filter((e) => e.id !== effectId);
+      if (effects.length === (layer.effects ?? []).length) throw new Error(`No effect ${effectId}`);
+      const { effects: _drop, ...rest } = layer;
+      return replaceLayer(comp, effects.length ? { ...rest, effects } : rest);
+    },
+  };
+}
+
+/** Move an effect within the stack (earlier effects are applied first). */
+export function moveEffect(layerId: Id, effectId: Id, toIndex: number): Command {
+  return {
+    label: "Reorder effects",
+    apply(comp) {
+      const layer = find(comp, layerId);
+      const list = [...(layer.effects ?? [])];
+      const from = list.findIndex((e) => e.id === effectId);
+      if (from < 0) throw new Error(`No effect ${effectId}`);
+      const to = Math.min(Math.max(toIndex, 0), list.length - 1);
+      if (to === from) return comp;
+      const [e] = list.splice(from, 1);
+      list.splice(to, 0, e!);
+      return replaceLayer(comp, { ...layer, effects: list });
+    },
+  };
+}
+
+/** Change one effect (on/off, colour, values). `edit` returns the new effect, or the same object for no change. */
+export function patchEffect(layerId: Id, effectId: Id, label: string, edit: (e: Effect) => Effect): Command {
+  return {
+    label,
+    apply(comp) {
+      const layer = find(comp, layerId);
+      const list = layer.effects ?? [];
+      const i = list.findIndex((e) => e.id === effectId);
+      if (i < 0) throw new Error(`No effect ${effectId}`);
+      const next = edit(list[i]!);
+      return next === list[i] ? comp : replaceLayer(comp, { ...layer, effects: list.map((e, k) => (k === i ? next : e)) });
     },
   };
 }

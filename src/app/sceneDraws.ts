@@ -4,7 +4,8 @@ import type { SceneItem } from "../core/scene";
 import type { ShapeGeometry } from "../geometry/layerGeometry";
 import type { FrameRef } from "../video/videoLibrary";
 import { rectMesh } from "../geometry/rect";
-import type { Draw, PlacedDraw } from "../render/meshRenderer";
+import type { Draw, GroupInfo, PlacedDraw } from "../render/meshRenderer";
+import { scaleSpatial } from "../core/effects";
 import type { EditorController } from "../editor/controller";
 import { worldCorners } from "../editor/handles";
 
@@ -24,9 +25,14 @@ export function drawsFor(
   mediaOf?: (id: string) => FrameRef | undefined,
 ): PlacedDraw[] {
   const out: PlacedDraw[] = [];
-  for (const item of items) {
+  const unit = Math.hypot(toDevice[0], toDevice[1]);
+  items.forEach((item, itemIndex) => {
     const g = geometryOf(item.id);
-    if (!g) continue;
+    if (!g) return;
+    const group: GroupInfo | undefined = item.effects.length
+      ? { id: itemIndex, fx: item.effects.map((f) => scaleSpatial(f, unit)), opacity: item.opacity, blend: item.blend }
+      : undefined;
+    const first = out.length;
     const layerToDevice = multiply(toDevice, item.matrix);
     const [ma, mb, mc, md] = item.matrix;
     const sx = Math.hypot(ma, mb);
@@ -49,7 +55,8 @@ export function drawsFor(
         out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(part.image ? { image: part.image } : {}), ...(part.gradient ? { gradient: part.gradient } : {}) });
       }
     }
-  }
+    if (group) for (let i = first; i < out.length; i++) out[i] = { ...out[i]!, group };
+  });
   return out;
 }
 
@@ -71,6 +78,7 @@ interface Target {
   setScene(draws: readonly Draw[]): void;
   setTransform(index: number, m: Affine, opacity: number): void;
   setFrame(index: number, frame: VideoFrame | undefined): void;
+  setGroup?(index: number, group: GroupInfo | undefined): void;
 }
 
 /**
@@ -83,7 +91,7 @@ export class SceneSync {
   sync(target: Target, draws: PlacedDraw[]): "scene" | "transforms" {
     const same =
       draws.length === this.last.length &&
-      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.image === this.last[i]!.image && d.gradient === this.last[i]!.gradient && d.blend === this.last[i]!.blend && !d.frame === !this.last[i]!.frame && d.color.every((c, k) => c === this.last[i]!.color[k]));
+      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.image === this.last[i]!.image && d.gradient === this.last[i]!.gradient && d.group?.id === this.last[i]!.group?.id && d.blend === this.last[i]!.blend && !d.frame === !this.last[i]!.frame && d.color.every((c, k) => c === this.last[i]!.color[k]));
     if (!same) {
       target.setScene(draws);
       this.last = draws;
@@ -92,6 +100,7 @@ export class SceneSync {
     draws.forEach((d, i) => {
       if (d.frame) target.setFrame(i, d.frame); // a new video frame is a texture swap, not a geometry upload
       target.setTransform(i, d.transform, d.opacity);
+      if (d.group) target.setGroup?.(i, d.group);
     });
     this.last = draws;
     return "transforms";

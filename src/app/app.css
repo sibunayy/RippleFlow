@@ -121,3 +121,15 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .nodebar button.on { outline: 2px solid #4aa3ff; }
 .nodebar button:disabled { opacity: 0.4; }
 .nodebar .hint { padding: 0 6px; }
+.fx { gap: 8px; }
+.fx-head { display: flex; align-items: center; justify-content: space-between; }
+.mini.wide { padding: 0 12px; font-size: 14px; }
+.fx-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fx-menu button { min-height: 40px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 13px; }
+.fx-card { display: flex; flex-direction: column; gap: 8px; padding: 8px; background: #2b2b33; border-radius: 10px; }
+.fx-card.off { opacity: 0.55; }
+.fx-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; }
+.fx-btns { display: flex; gap: 4px; }
+.fx-btns .mini { min-width: 36px; min-height: 36px; font-size: 14px; padding: 0 6px; }
+.fx-params { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fx-params .scrub-label { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

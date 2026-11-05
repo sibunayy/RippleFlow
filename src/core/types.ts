@@ -41,6 +41,29 @@ export interface Transform {
 
 export type Rgba = readonly [number, number, number, number];
 
+export type EffectType =
+  | "blur"
+  | "dropShadow"
+  | "glow"
+  | "noise"
+  | "levels"
+  | "brightnessContrast"
+  | "exposure"
+  | "hueSaturation"
+  | "tint"
+  | "invert"
+  | "posterize";
+
+/** A non-destructive effect on a layer. Numbers are tracks, so they can be keyframed like transforms. */
+export interface Effect {
+  readonly id: Id;
+  readonly type: EffectType;
+  /** Defaults to on. */
+  readonly enabled?: boolean;
+  readonly values: Readonly<Record<string, Track>>;
+  readonly color?: Rgba;
+}
+
 /** How a layer's colours combine with what is behind it. Only modes the GPU's fixed blend stage can do exactly. */
 export type BlendMode = "normal" | "multiply" | "screen" | "add";
 export const BLEND_MODES: readonly BlendMode[] = ["normal", "multiply", "screen", "add"];
@@ -112,6 +135,8 @@ export interface Layer {
   readonly parent?: Id;
   /** Defaults to "normal". */
   readonly blend?: BlendMode;
+  /** Applied in order to the layer as a whole (all its fill, stroke and picture), before blending. */
+  readonly effects?: readonly Effect[];
   readonly transform: Transform;
   /** Present on shape layers. */
   readonly shape?: ShapeContent;
