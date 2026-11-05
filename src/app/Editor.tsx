@@ -3,7 +3,9 @@ import { removeLayer } from "../core/commands";
 import { EditorController, type PointerInput } from "../editor/controller";
 import { MeshRenderer } from "../render/meshRenderer";
 import { buildDraws, SceneSync, selectionCorners } from "./sceneDraws";
-import { addShape, type ShapeKind } from "./shapes";
+import { Autosaver, loadProject, type SaveState } from "../persist/autosave";
+import { MemoryStore, OpfsStore, opfsAvailable, type ProjectStore } from "../persist/store";
+import { addShape, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
 import { Graph } from "./Graph";
 import { Props } from "./Props";
@@ -11,7 +13,7 @@ import { Timeline } from "./Timeline";
 
 declare global {
   interface Window {
-    __rf?: { ctrl: EditorController; renderer: MeshRenderer; frame: () => void };
+    __rf?: { ctrl: EditorController; renderer: MeshRenderer; frame: () => void; saver: Autosaver };
   }
 }
 
@@ -23,7 +25,11 @@ export function Editor() {
   const [error, setError] = createSignal<string | null>(null);
   const [playing, setPlaying] = createSignal(false);
   const [picked, setPicked] = createSignal<KeyColumn | null>(null);
-  let counter = 0;
+  const [saveState, setSaveState] = createSignal<SaveState | "unavailable">("saved");
+  const [notice, setNotice] = createSignal<string | null>(null);
+  const store: ProjectStore = opfsAvailable() ? new OpfsStore() : new MemoryStore();
+  const saver = new Autosaver({ store, id: "autosave", onState: (st) => setSaveState(st) });
+  if (!opfsAvailable()) setSaveState("unavailable");
   let renderer: MeshRenderer | undefined;
   const sync = new SceneSync();
   let dirty = true;
@@ -33,6 +39,7 @@ export function Editor() {
   const noloop = new URLSearchParams(location.search).has("noloop");
 
   const bump = () => {
+    saver.touch(ctrl.document);
     dirty = true;
     setTick((n) => n + 1);
   };
@@ -53,6 +60,16 @@ export function Editor() {
 
   onMount(async () => {
     const unsub = ctrl.subscribe(bump);
+    const hide = () => {
+      if (document.visibilityState === "hidden") void saver.flush();
+    };
+    document.addEventListener("visibilitychange", hide);
+    addEventListener("pagehide", hide);
+    onCleanup(() => {
+      document.removeEventListener("visibilitychange", hide);
+      removeEventListener("pagehide", hide);
+    });
+    void restore();
     const resize = () => {
       const r = stage.getBoundingClientRect();
       const first = canvas.width <= 300;
@@ -72,13 +89,34 @@ export function Editor() {
       renderer = await MeshRenderer.create(canvas);
       renderer.clearColor = { r: 0.13, g: 0.13, b: 0.15, a: 1 };
       resize();
-      if (new URLSearchParams(location.search).has("debug")) window.__rf = { ctrl, renderer, frame: () => frame(performance.now()) };
+      if (new URLSearchParams(location.search).has("debug")) window.__rf = { ctrl, renderer, frame: () => frame(performance.now()), saver };
       if (!noloop) raf = requestAnimationFrame(frame);
       else frame(performance.now());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   });
+
+  async function restore() {
+    try {
+      const r = await loadProject(store, "autosave");
+      if (r.kind === "ok") {
+        saver.markSaved(r.doc);
+        ctrl.replaceDocument(r.doc);
+      } else if (r.kind === "corrupt") {
+        // Keep the damaged text so it is not lost when the next edit overwrites the autosave.
+        await store.save("autosave.corrupt", r.text);
+        setNotice(`Your last project could not be read (${r.error.message}). A copy was kept as autosave.corrupt.`);
+        saver.markSaved(ctrl.document);
+      } else {
+        saver.markSaved(ctrl.document);
+      }
+    } catch (e) {
+      // Saving stays off: we could not read what is there, so we must not overwrite it.
+      setSaveState("unavailable");
+      setNotice(`Could not open saved work, so autosave is off: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   const input = (e: PointerEvent): PointerInput => {
     const r = canvas.getBoundingClientRect();
@@ -104,9 +142,9 @@ export function Editor() {
   const onCancel = (e: PointerEvent) => ctrl.pointerCancel(input(e));
 
   const add = (kind: ShapeKind) => {
-    counter++;
-    const id = `layer-${counter}`;
-    ctrl.execute(addShape(kind, counter, ctrl.document.width, ctrl.document.height));
+    const n = nextLayerNumber(ctrl.document.layers);
+    const id = `layer-${n}`;
+    ctrl.execute(addShape(kind, n, ctrl.document.width, ctrl.document.height));
     ctrl.setSelection(id);
   };
   const del = () => {
@@ -128,6 +166,9 @@ export function Editor() {
         <button onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}>Undo</button>
         <button onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}>Redo</button>
         <span class="sep" />
+        <span class="save" classList={{ bad: saveState() === "error" || saveState() === "unavailable" }}>
+          {({ saved: "Saved", saving: "Saving…", dirty: "Unsaved", error: "Save failed", unavailable: "Not saved: storage unavailable" } as const)[saveState()]}
+        </span>
         <label>
           <input type="checkbox" onChange={(e) => (ctrl.autoKey = e.currentTarget.checked)} /> Auto-key
         </label>
@@ -153,6 +194,9 @@ export function Editor() {
           </Show>
         </svg>
         <Graph ctrl={ctrl} tick={tick} picked={picked} />
+        <Show when={notice()}>
+          <p class="error notice" onClick={() => setNotice(null)}>{notice()}</p>
+        </Show>
         <Show when={error()}>
           <p class="error">WebGPU unavailable: {error()}</p>
         </Show>

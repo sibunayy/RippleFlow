@@ -42,6 +42,16 @@ export class EditorController {
     this.history = new History(initial);
   }
 
+  /** Swap in a different document (opening a project): clears history, selection and any drag. */
+  replaceDocument(doc: Composition): void {
+    this.history = new History(doc);
+    this.tool.cancel();
+    this.tool.setSelection(null);
+    this.preview = null;
+    this.time = 0;
+    this.emit();
+  }
+
   /** The committed document. */
   get document(): Composition {
     return this.history.current;
