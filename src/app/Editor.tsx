@@ -14,7 +14,7 @@ import { VideoLibrary, type VideoMode } from "../video/videoLibrary";
 import { MemoryAssets, OpfsAssets, type AssetStore } from "../persist/assets";
 import { serialize } from "../persist/serialize";
 import { addLayer, sequence, setDuration } from "../core/commands";
-import { addShape, newImageLayer, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
+import { addShape, newNullLayer, newImageLayer, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Graph } from "./Graph";
@@ -283,6 +283,11 @@ export function Editor() {
     ctrl.execute(addShape(kind, n, ctrl.document.width, ctrl.document.height));
     ctrl.setSelection(id);
   };
+  const addNull = () => {
+    const layer = newNullLayer(nextLayerNumber(ctrl.document.layers), ctrl.document.width, ctrl.document.height);
+    ctrl.execute(addLayer(layer));
+    ctrl.setSelection(layer.id);
+  };
   const del = () => {
     const id = ctrl.selection;
     if (id) ctrl.execute(removeLayer(id));
@@ -301,6 +306,7 @@ export function Editor() {
         <button onClick={() => add("rect")}>Rect</button>
         <button onClick={() => add("ellipse")}>Ellipse</button>
         <button onClick={() => add("star")}>Star</button>
+        <button onClick={addNull}>Null</button>
         <button onClick={() => fileInput.click()}>Image</button>
         <button onClick={() => videoInput.click()}>Video</button>
         <input ref={videoInput} type="file" accept="video/*,.mov,.mp4,.m4v" hidden onChange={(e) => void importVideos(e.currentTarget.files)} />
