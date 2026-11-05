@@ -84,6 +84,7 @@ export function Compositing(props: { ctrl: EditorController; tick: () => number;
         <span class="fx-btns">
           <button class="mini wide" onClick={() => addPreset("rect")}>+ Rect</button>
           <button class="mini wide" onClick={() => addPreset("ellipse")}>+ Ellipse</button>
+          <button class="mini wide" onClick={() => props.ctrl.startPen({ kind: "mask", layerId: props.layer().id })}>+ Draw</button>
         </span>
       </div>
       <For each={props.layer().masks ?? []}>

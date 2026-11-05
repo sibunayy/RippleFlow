@@ -1,3 +1,4 @@
+import { apply, type Affine } from "../core/affine";
 import { parseSvgPath } from "./svgPath";
 import type { PathCmd } from "./path";
 
@@ -276,4 +277,30 @@ export function nearestOnPath(paths: Paths, px: number, py: number): PathHit | n
     }
   });
   return best;
+}
+
+/** Map every point (and handle) through an affine transform. */
+export function transformPath(p: NodePath, m: Affine): NodePath {
+  const [a, b, c, d] = m;
+  return {
+    closed: p.closed,
+    nodes: p.nodes.map((n) => {
+      const [x, y] = apply(m, n.x, n.y);
+      return { x, y, ix: a * n.ix + c * n.iy, iy: b * n.ix + d * n.iy, ox: a * n.ox + c * n.oy, oy: b * n.ox + d * n.oy };
+    }),
+  };
+}
+
+/** Box around all anchors and handle tips, or undefined when empty. */
+export function pathBounds(paths: readonly NodePath[]): { x: number; y: number; w: number; h: number } | undefined {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of paths)
+    for (const n of p.nodes)
+      for (const [x, y] of [[n.x, n.y], [n.x + n.ix, n.y + n.iy], [n.x + n.ox, n.y + n.oy]] as const) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+  return minX <= maxX ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY } : undefined;
 }

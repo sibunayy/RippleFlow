@@ -1,6 +1,8 @@
 import { addLayer } from "../core/commands";
 import type { Command } from "../core/history";
 import { displaySize } from "../geometry/layerGeometry";
+import { nodesToPath, pathBounds, transformPath, type NodePath } from "../geometry/nodes";
+import { translate } from "../core/affine";
 import type { ImageContent, Layer, Rgba, Track, VideoContent } from "../core/types";
 
 const empty: Track = { keys: [] };
@@ -100,4 +102,33 @@ export function nextLayerNumber(layers: readonly { id: string }[]): number {
     if (m) max = Math.max(max, Number(m[1]));
   }
   return max + 1;
+}
+
+/**
+ * A shape layer from a drawn path (composition coordinates). The layer's box is the path's box and it
+ * rotates and scales about its centre. Closed paths are filled; open ones are a rounded white stroke.
+ */
+export function newPathLayer(n: number, path: NodePath): Layer | null {
+  const b = pathBounds([path]);
+  if (!b) return null;
+  const local = transformPath(path, translate(-b.x, -b.y));
+  return {
+    id: `layer-${n}`,
+    name: `Path ${n}`,
+    kind: "shape",
+    shape: {
+      path: nodesToPath([local]),
+      ...(path.closed ? { fill: PALETTE[n % PALETTE.length]! } : { stroke: { color: [1, 1, 1, 1], width: 8, join: "round", cap: "round" } }),
+    },
+    transform: {
+      anchorX: still(b.w / 2),
+      anchorY: still(b.h / 2),
+      x: still(b.x + b.w / 2),
+      y: still(b.y + b.h / 2),
+      scaleX: empty,
+      scaleY: empty,
+      rotation: empty,
+      opacity: empty,
+    },
+  };
 }
