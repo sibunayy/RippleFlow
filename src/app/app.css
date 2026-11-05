@@ -1,0 +1,18 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; }
+html, body, #root { height: 100%; margin: 0; background: #1a1a1f; color: #e8e8ee; }
+body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+.app { display: flex; flex-direction: column; height: 100%; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #24242b; }
+.bar button { min-height: 44px; min-width: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: #34343e; color: inherit; font-size: 15px; }
+.bar button:disabled { opacity: 0.4; }
+.bar label { display: flex; align-items: center; gap: 6px; min-height: 44px; }
+.bar input[type="range"] { flex: 1; min-height: 44px; }
+.sep { width: 1px; height: 28px; background: #44444e; }
+.time { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.stage canvas, .stage .overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+.stage canvas { touch-action: none; }
+.overlay { pointer-events: none; }
+.sel { fill: none; stroke: #4aa3ff; stroke-width: 1.5; }
+.handle { fill: #fff; stroke: #4aa3ff; stroke-width: 2; }
+.error { position: absolute; inset: auto 12px 12px; padding: 12px; background: #5a1f1f; border-radius: 8px; }
