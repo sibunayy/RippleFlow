@@ -119,6 +119,13 @@ export function Timeline(props: {
     for (let cur = byId.get(id)?.parent; cur !== undefined && n < 8; cur = byId.get(cur)?.parent) n++;
     return n;
   };
+  const [rdrag, setRdrag] = createSignal<{ id: string; to: number } | null>(null);
+  const rowIndexAt = (y: number): number => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>(".tl-body .tl-row:not(.tl-head)"));
+    let k = rows.findIndex((r) => y < r.getBoundingClientRect().bottom);
+    if (k < 0) k = rows.length - 1;
+    return Math.max(0, k);
+  };
   const shift = (dir: 1 | -1) => {
     const id = ctrl.selection;
     if (!id) return;
@@ -151,7 +158,9 @@ export function Timeline(props: {
         </div>
         <For each={layers()}>
           {(layer) => (
-            <div class="tl-row" classList={{ on: (props.tick(), ctrl.selection === layer.id) }}>
+            <div
+              class="tl-row"
+              classList={{ on: (props.tick(), ctrl.selection === layer.id), dragging: rdrag()?.id === layer.id }}>
               <div class="tl-label" onClick={() => ctrl.setSelection(layer.id)} style={{ "padding-left": `${12 + 12 * (props.tick(), depth(layer.id))}px` }}>
                 <button
                   class="eye"
@@ -165,6 +174,31 @@ export function Timeline(props: {
                 >
                   {layer.hidden ? "◌" : "●"}
                 </button>
+                <span
+                  class="grip"
+                  aria-label="Drag to reorder"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    ctrl.setSelection(layer.id);
+                    setRdrag({ id: layer.id, to: rowIndexAt(e.clientY) });
+                  }}
+                  onPointerMove={(e) => {
+                    const d = rdrag();
+                    if (d && d.id === layer.id) setRdrag({ ...d, to: rowIndexAt(e.clientY) });
+                  }}
+                  onPointerUp={() => {
+                    const d = rdrag();
+                    setRdrag(null);
+                    if (!d || d.id !== layer.id) return;
+                    // rows are top-first; stack index 0 is the bottom
+                    const target = ctrl.document.layers.length - 1 - d.to;
+                    if (target !== ctrl.document.layers.findIndex((l) => l.id === d.id)) ctrl.execute(moveLayer(d.id, target));
+                  }}
+                  onPointerCancel={() => setRdrag(null)}>
+                  ⠿
+                </span>
                 {layer.name}
               </div>
               <div class="tl-track">

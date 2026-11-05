@@ -147,3 +147,6 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .comp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; }
 .comp-grid input { width: 100%; min-height: 40px; }
 .presets button.on { background: #5b6cff; }
+
+.grip { display: inline-block; width: 24px; height: 28px; line-height: 28px; text-align: center; opacity: 0.5; cursor: grab; touch-action: none; user-select: none; vertical-align: middle; }
+.tl-row.dragging { outline: 1px dashed currentColor; opacity: 0.7; }
