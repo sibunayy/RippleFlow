@@ -150,3 +150,6 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 
 .grip { display: inline-block; width: 24px; height: 28px; line-height: 28px; text-align: center; opacity: 0.5; cursor: grab; touch-action: none; user-select: none; vertical-align: middle; }
 .tl-row.dragging { outline: 1px dashed currentColor; opacity: 0.7; }
+.anim-presets { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
+.anim-presets button { min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: #3b3b4a; color: inherit; }
+.anim-presets button.out { background: #46363b; }

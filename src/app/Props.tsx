@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import { setParent } from "../core/commands";
+import { applyPreset, PRESETS } from "../core/presets";
 import type { Layer } from "../core/types";
 import type { EditorController } from "../editor/controller";
 import { propValue, setPropValue, type EditableProp } from "../editor/transformEdit";
@@ -45,6 +46,18 @@ export function Props(props: { ctrl: EditorController; tick: () => number }) {
               </For>
             </select>
           </label>
+          <div class="anim-presets" role="group" aria-label="Animation presets">
+            <For each={PRESETS}>
+              {(p) => (
+                <button
+                  classList={{ out: p.kind === "out" }}
+                  title={p.kind === "in" ? "Animate in at the layer's start" : "Animate out at the layer's end"}
+                  onClick={() => props.ctrl.execute(applyPreset(l().id, p.id, props.ctrl.document.duration))}>
+                  {p.label}
+                </button>
+              )}
+            </For>
+          </div>
           <For each={FIELDS}>
             {(f) => {
               const cmd = (v: number) => setPropValue(l().id, f.prop, v / f.mul, props.ctrl.time, props.ctrl.autoKey);
