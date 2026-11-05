@@ -1,0 +1,122 @@
+import { describe, expect, it } from "vitest";
+import { addLayer, moveLayer, removeKeyframe, removeLayer, setInOut, setKeyframe, setParent } from "./commands";
+import { History } from "./history";
+import type { Composition, Layer, Track, Transform } from "./types";
+
+const NONE: Track = { keys: [] };
+const tf = (): Transform => ({ anchorX: NONE, anchorY: NONE, x: NONE, y: NONE, scaleX: NONE, scaleY: NONE, rotation: NONE, opacity: NONE });
+const layer = (id: string, parent?: string): Layer => ({ id, name: id, kind: "shape", transform: tf(), ...(parent ? { parent } : {}) });
+const empty: Composition = { width: 1920, height: 1080, fps: 30, duration: 10, layers: [] };
+const ids = (c: Composition) => c.layers.map((l) => l.id);
+
+describe("History", () => {
+  it("undoes and redoes edits", () => {
+    const h = new History(empty);
+    h.execute(addLayer(layer("a")));
+    h.execute(addLayer(layer("b")));
+    expect(ids(h.current)).toEqual(["a", "b"]);
+    h.undo();
+    expect(ids(h.current)).toEqual(["a"]);
+    h.redo();
+    expect(ids(h.current)).toEqual(["a", "b"]);
+  });
+  it("a new edit clears the redo stack", () => {
+    const h = new History(empty);
+    h.execute(addLayer(layer("a")));
+    h.undo();
+    expect(h.canRedo).toBe(true);
+    h.execute(addLayer(layer("b")));
+    expect(h.canRedo).toBe(false);
+  });
+  it("undo and redo at the ends do nothing", () => {
+    const h = new History(empty);
+    expect(h.undo()).toBe(empty);
+    expect(h.redo()).toBe(empty);
+  });
+  it("a command that throws leaves history untouched", () => {
+    const h = new History(empty);
+    h.execute(addLayer(layer("a")));
+    expect(() => h.execute(setParent("a", "ghost"))).toThrow();
+    expect(ids(h.current)).toEqual(["a"]);
+    h.undo();
+    expect(ids(h.current)).toEqual([]);
+  });
+  it("a no-op edit does not add an undo step", () => {
+    const h = new History(empty);
+    h.execute(addLayer(layer("a")));
+    h.execute(moveLayer("a", 0));
+    expect(h.undoLabel).toBe("Add layer a");
+    h.undo();
+    expect(ids(h.current)).toEqual([]);
+  });
+  it("caps the undo depth", () => {
+    const h = new History(empty, 3);
+    for (const id of ["a", "b", "c", "d", "e"]) h.execute(addLayer(layer(id)));
+    let steps = 0;
+    while (h.canUndo) {
+      h.undo();
+      steps++;
+    }
+    expect(steps).toBe(3);
+  });
+  it("never mutates a previous composition", () => {
+    const h = new History(empty);
+    const before = h.current;
+    h.execute(addLayer(layer("a")));
+    expect(before.layers).toHaveLength(0);
+  });
+});
+
+describe("commands", () => {
+  const withLayers = (...ls: Layer[]): Composition => ({ ...empty, layers: ls });
+
+  it("addLayer inserts at an index and rejects duplicate ids", () => {
+    const c = addLayer(layer("x"), 1).apply(withLayers(layer("a"), layer("b")));
+    expect(ids(c)).toEqual(["a", "x", "b"]);
+    expect(() => addLayer(layer("a")).apply(c)).toThrow(/already exists/);
+  });
+  it("moveLayer reorders and clamps", () => {
+    const c = withLayers(layer("a"), layer("b"), layer("c"));
+    expect(ids(moveLayer("a", 99).apply(c))).toEqual(["b", "c", "a"]);
+    expect(ids(moveLayer("c", 0).apply(c))).toEqual(["c", "a", "b"]);
+  });
+  it("setParent rejects cycles, including self-parenting", () => {
+    const c = withLayers(layer("a"), layer("b", "a"), layer("c", "b"));
+    expect(() => setParent("a", "c").apply(c)).toThrow(/cycle/);
+    expect(() => setParent("a", "a").apply(c)).toThrow(/cycle/);
+    expect(setParent("c", "a").apply(c).layers.find((l) => l.id === "c")!.parent).toBe("a");
+  });
+  it("setParent can clear a parent", () => {
+    const c = withLayers(layer("a"), layer("b", "a"));
+    expect(setParent("b", undefined).apply(c).layers[1]!.parent).toBeUndefined();
+  });
+  it("removeLayer re-attaches children to the grandparent", () => {
+    const c = withLayers(layer("g"), layer("p", "g"), layer("k", "p"));
+    const out = removeLayer("p").apply(c);
+    expect(ids(out)).toEqual(["g", "k"]);
+    expect(out.layers[1]!.parent).toBe("g");
+    const top = removeLayer("g").apply(withLayers(layer("g"), layer("p", "g")));
+    expect(top.layers[0]!.parent).toBeUndefined();
+  });
+  it("setKeyframe keeps keys sorted and replaces a key at the same time", () => {
+    let c = withLayers(layer("a"));
+    c = setKeyframe("a", "x", { id: "k2", t: 2, value: 20 }).apply(c);
+    c = setKeyframe("a", "x", { id: "k1", t: 1, value: 10 }).apply(c);
+    c = setKeyframe("a", "x", { id: "k1b", t: 2, value: 99 }).apply(c);
+    expect(c.layers[0]!.transform.x.keys.map((k) => [k.t, k.value])).toEqual([[1, 10], [2, 99]]);
+  });
+  it("removeKeyframe removes by id and ignores unknown ids", () => {
+    let c = setKeyframe("a", "x", { id: "k", t: 0, value: 1 }).apply(withLayers(layer("a")));
+    expect(removeKeyframe("a", "x", "nope").apply(c)).toBe(c);
+    c = removeKeyframe("a", "x", "k").apply(c);
+    expect(c.layers[0]!.transform.x.keys).toHaveLength(0);
+  });
+  it("setInOut validates the range", () => {
+    const c = withLayers(layer("a"));
+    expect(setInOut("a", 1, 3).apply(c).layers[0]).toMatchObject({ inPoint: 1, outPoint: 3 });
+    expect(() => setInOut("a", 3, 3).apply(c)).toThrow();
+  });
+  it("commands reject unknown layers", () => {
+    expect(() => setKeyframe("nope", "x", { id: "k", t: 0, value: 1 }).apply(empty)).toThrow(/Unknown layer/);
+  });
+});
