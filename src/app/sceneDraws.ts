@@ -2,27 +2,15 @@ import { multiply, scale, type Affine } from "../core/affine";
 import type { Composition, Rgba } from "../core/types";
 import type { SceneItem } from "../core/scene";
 import type { ShapeGeometry } from "../geometry/layerGeometry";
-import type { Mesh } from "../geometry/mesh";
-import type { Draw } from "../render/meshRenderer";
+import { rectMesh } from "../geometry/rect";
+import type { Draw, PlacedDraw } from "../render/meshRenderer";
 import type { EditorController } from "../editor/controller";
 import { worldCorners } from "../editor/handles";
 
 export const DEFAULT_BACKGROUND: Rgba = [1, 1, 1, 1];
 
-const rectMeshes = new Map<string, Mesh>();
-/** Shared two-triangle rectangle mesh, so a background draw never re-uploads geometry. */
-function rectMesh(w: number, h: number): Mesh {
-  const key = `${w}x${h}`;
-  let m = rectMeshes.get(key);
-  if (!m) {
-    m = { positions: new Float32Array([0, 0, w, 0, w, h, 0, h]), indices: new Uint32Array([0, 1, 2, 0, 2, 3]) };
-    rectMeshes.set(key, m);
-  }
-  return m;
-}
-
 /** The composition's backdrop as a draw (composition space through `toDevice`). */
-export function backgroundDraw(comp: Composition, toDevice: Affine): Required<Draw> {
+export function backgroundDraw(comp: Composition, toDevice: Affine): PlacedDraw {
   return { mesh: rectMesh(comp.width, comp.height), color: comp.background ?? DEFAULT_BACKGROUND, transform: toDevice, opacity: 1 };
 }
 
@@ -31,22 +19,22 @@ export function drawsFor(
   items: readonly SceneItem[],
   geometryOf: (id: string) => ShapeGeometry | undefined,
   toDevice: Affine,
-): Required<Draw>[] {
-  const out: Required<Draw>[] = [];
+): PlacedDraw[] {
+  const out: PlacedDraw[] = [];
   for (const item of items) {
     const g = geometryOf(item.id);
     if (!g) continue;
     const transform = multiply(toDevice, item.matrix);
     for (const part of g.parts) {
       if (part.mesh.indices.length === 0) continue;
-      out.push({ mesh: part.mesh, color: part.color, transform, opacity: item.opacity });
+      out.push({ mesh: part.mesh, color: part.color, transform, opacity: item.opacity, ...(part.image ? { image: part.image } : {}) });
     }
   }
   return out;
 }
 
 /** Everything to draw for the editor view: backdrop, then layers, in canvas device pixels. */
-export function buildDraws(ctrl: EditorController, devicePixelRatio: number): Required<Draw>[] {
+export function buildDraws(ctrl: EditorController, devicePixelRatio: number): PlacedDraw[] {
   const toDevice = multiply(scale(devicePixelRatio), ctrl.view);
   const comp = ctrl.displayed;
   return [backgroundDraw(comp, toDevice), ...drawsFor(ctrl.scene(), (id) => ctrl.geometryOf(id), toDevice)];
@@ -62,12 +50,12 @@ interface Target {
  * layer or a pan/zoom only rewrites the 64-byte uniforms.
  */
 export class SceneSync {
-  private last: Required<Draw>[] = [];
+  private last: PlacedDraw[] = [];
 
-  sync(target: Target, draws: Required<Draw>[]): "scene" | "transforms" {
+  sync(target: Target, draws: PlacedDraw[]): "scene" | "transforms" {
     const same =
       draws.length === this.last.length &&
-      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.color.every((c, k) => c === this.last[i]!.color[k]));
+      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.image === this.last[i]!.image && d.color.every((c, k) => c === this.last[i]!.color[k]));
     if (!same) {
       target.setScene(draws);
       this.last = draws;

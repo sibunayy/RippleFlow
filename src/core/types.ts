@@ -55,6 +55,15 @@ export interface ShapeContent {
   };
 }
 
+/** Reference to an imported picture. The bytes live in the asset store under `asset`. */
+export interface ImageContent {
+  /** Content hash (lowercase hex). */
+  readonly asset: string;
+  /** Size of the decoded picture in pixels, which is also its size in composition units at scale 1. */
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface Layer {
   readonly id: Id;
   readonly name: string;
@@ -63,6 +72,8 @@ export interface Layer {
   readonly transform: Transform;
   /** Present on shape layers. */
   readonly shape?: ShapeContent;
+  /** Present on image layers. */
+  readonly image?: ImageContent;
   /** Seconds. The layer is visible for inPoint <= t < outPoint. Defaults: 0 and the composition duration. */
   readonly inPoint?: number;
   readonly outPoint?: number;

@@ -1,7 +1,7 @@
 import { scale } from "../core/affine";
 import { evaluateScene } from "../core/scene";
 import type { Composition, Id } from "../core/types";
-import { buildShapeGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
+import { buildLayerGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
 import { MeshRenderer } from "../render/meshRenderer";
 import { backgroundDraw, DEFAULT_BACKGROUND, drawsFor, SceneSync } from "../app/sceneDraws";
 import { exportMp4, type ExportResult } from "./encodeMp4";
@@ -32,6 +32,8 @@ export function exportSize(comp: Composition, preset: ExportPreset): { width: nu
 export interface ExportOptions {
   readonly preset: ExportPreset;
   readonly signal?: AbortSignal;
+  /** Resolves a loaded picture by asset id (image layers). */
+  readonly bitmapOf?: (asset: string) => ImageBitmap | undefined;
   readonly onProgress?: (done: number, total: number) => void;
 }
 
@@ -52,7 +54,7 @@ export async function exportComposition(comp: Composition, opts: ExportOptions):
     renderer.clearColor = { r: bg[0], g: bg[1], b: bg[2], a: 1 };
 
     const geometry = new Map<Id, ShapeGeometry | undefined>();
-    for (const l of comp.layers) if (l.shape) geometry.set(l.id, buildShapeGeometry(l.shape));
+    for (const l of comp.layers) geometry.set(l.id, buildLayerGeometry(l, opts.bitmapOf ?? (() => undefined)));
     const toDevice = scale(width / comp.width, height / comp.height);
     const sync = new SceneSync();
     const bgra = renderer.format === "bgra8unorm";

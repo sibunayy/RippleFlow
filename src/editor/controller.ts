@@ -2,7 +2,7 @@ import { apply, invert, multiply, scale, translate, type Affine } from "../core/
 import { History, type Command } from "../core/history";
 import { evaluateScene, type SceneItem } from "../core/scene";
 import type { Composition, Id } from "../core/types";
-import { buildShapeGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
+import { buildImageGeometry, buildShapeGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
 import { TwoFingerGesture } from "../input/twoFingerGesture";
 import { applyWorldDelta, transformLayer } from "./transformEdit";
 import { SelectTool, type ToolContext, type ToolOutput } from "./selectTool";
@@ -107,9 +107,15 @@ export class EditorController {
     return evaluateScene(this.displayed, this.time);
   }
 
-  /** Local-space geometry for a layer, built once per shape object. */
+  /** Resolves a loaded picture by asset id. The app sets this; until a picture loads it returns undefined. */
+  bitmapOf: (asset: string) => ImageBitmap | undefined = () => undefined;
+
+  /** Local-space geometry for a layer. Shapes are built once per shape object; image layers are a cheap shared rectangle. */
   geometryOf(id: Id): ShapeGeometry | undefined {
-    const shape = this.document.layers.find((l) => l.id === id)?.shape;
+    const layer = this.document.layers.find((l) => l.id === id);
+    if (!layer) return undefined;
+    if (layer.image) return buildImageGeometry(layer.image, this.bitmapOf(layer.image.asset));
+    const shape = layer.shape;
     if (!shape) return undefined;
     let g = this.geometry.get(shape);
     if (!g) {
@@ -117,6 +123,11 @@ export class EditorController {
       this.geometry.set(shape, g);
     }
     return g;
+  }
+
+  /** Tell the editor a picture finished loading so the view redraws. */
+  notifyImagesChanged(): void {
+    this.emit();
   }
 
   /** Centre the composition in a viewport, leaving `margin` px around it. */

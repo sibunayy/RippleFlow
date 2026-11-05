@@ -73,3 +73,17 @@ describe("rejects bad input", () => {
   });
   it("unknown layer kind", () => bad((o) => (o.composition.layers[0].kind = "text"), /kind/));
 });
+
+describe("image layers", () => {
+  const imgLayer = (over: Record<string, unknown> = {}) =>
+    ({ id: "i", name: "pic", kind: "image", image: { asset: "0123456789abcdef0123456789abcdef", width: 640, height: 480 }, transform: layer("x").transform, ...over }) as unknown as Layer;
+  it("round trips", () => {
+    const c = comp(imgLayer());
+    expect(deserialize(serialize(c))).toEqual(c);
+  });
+  it("rejects an image layer with no image, a bad asset id, or a bad size", () => {
+    for (const bad of [{ image: undefined }, { image: { asset: "../../etc/passwd", width: 1, height: 1 } }, { image: { asset: "0123456789abcdef", width: 0, height: 1 } }]) {
+      expect(() => deserialize(serialize(comp(imgLayer(bad))))).toThrow(FormatError);
+    }
+  });
+});

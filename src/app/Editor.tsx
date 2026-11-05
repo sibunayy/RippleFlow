@@ -5,7 +5,10 @@ import { MeshRenderer } from "../render/meshRenderer";
 import { buildDraws, SceneSync, selectionCorners } from "./sceneDraws";
 import { Autosaver, loadProject, type SaveState } from "../persist/autosave";
 import { MemoryStore, OpfsStore, opfsAvailable, type ProjectStore } from "../persist/store";
-import { addShape, nextLayerNumber, type ShapeKind } from "./shapes";
+import { ImageLibrary } from "./images";
+import { MemoryAssets, OpfsAssets } from "../persist/assets";
+import { addLayer } from "../core/commands";
+import { addShape, newImageLayer, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Graph } from "./Graph";
@@ -15,7 +18,7 @@ import { Timeline } from "./Timeline";
 
 declare global {
   interface Window {
-    __rf?: { ctrl: EditorController; renderer: MeshRenderer; frame: () => void; saver: Autosaver };
+    __rf?: { ctrl: EditorController; renderer: MeshRenderer; frame: () => void; saver: Autosaver; images: ImageLibrary };
   }
 }
 
@@ -32,6 +35,26 @@ export function Editor() {
   const [exporting, setExporting] = createSignal(false);
   const [update, setUpdate] = createSignal<(() => void) | null>(null);
   const store: ProjectStore = opfsAvailable() ? new OpfsStore() : new MemoryStore();
+  const images = new ImageLibrary(opfsAvailable() ? new OpfsAssets() : new MemoryAssets(), () => {
+    ctrl.notifyImagesChanged();
+    const bad = images.failed().length;
+    if (bad > 0) setNotice(`${bad} picture${bad === 1 ? "" : "s"} could not be loaded and show as grey boxes.`);
+  });
+  ctrl.bitmapOf = (asset) => images.bitmapOf(asset);
+  let fileInput!: HTMLInputElement;
+  const importFiles = async (files: FileList | null) => {
+    for (const file of Array.from(files ?? [])) {
+      try {
+        const content = await images.import(file);
+        const n = nextLayerNumber(ctrl.document.layers);
+        ctrl.execute(addLayer(newImageLayer(n, file.name.replace(/\.[^.]+$/, "") || `Image ${n}`, content, ctrl.document.width, ctrl.document.height)));
+        ctrl.setSelection(`layer-${n}`);
+      } catch (e) {
+        setNotice(`Could not import ${file.name}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    fileInput.value = ""; // allow picking the same file again
+  };
   const saver = new Autosaver({ store, id: "autosave", onState: (st) => setSaveState(st) });
   if (!opfsAvailable()) setSaveState("unavailable");
   let renderer: MeshRenderer | undefined;
@@ -94,7 +117,7 @@ export function Editor() {
       renderer = await MeshRenderer.create(canvas);
       renderer.clearColor = { r: 0.13, g: 0.13, b: 0.15, a: 1 };
       resize();
-      if (new URLSearchParams(location.search).has("debug")) window.__rf = { ctrl, renderer, frame: () => frame(performance.now()), saver };
+      if (new URLSearchParams(location.search).has("debug")) window.__rf = { ctrl, renderer, frame: () => frame(performance.now()), saver, images };
       if (!noloop) raf = requestAnimationFrame(frame);
       else frame(performance.now());
     } catch (e) {
@@ -166,6 +189,8 @@ export function Editor() {
         <button onClick={() => add("rect")}>Rect</button>
         <button onClick={() => add("ellipse")}>Ellipse</button>
         <button onClick={() => add("star")}>Star</button>
+        <button onClick={() => fileInput.click()}>Image</button>
+        <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => void importFiles(e.currentTarget.files)} />
         <button onClick={del} disabled={(tick(), ctrl.selection === null)}>Delete</button>
         <span class="sep" />
         <button onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}>Undo</button>
@@ -223,7 +248,7 @@ export function Editor() {
         </Show>
       </div>
       <Show when={exporting()}>
-        <ExportDialog comp={() => ctrl.document} onClose={() => setExporting(false)} />
+        <ExportDialog comp={() => ctrl.document} bitmapOf={(a) => images.bitmapOf(a)} onClose={() => setExporting(false)} />
       </Show>
       <Props ctrl={ctrl} tick={tick} />
       <Timeline ctrl={ctrl} tick={tick} picked={picked} setPicked={setPicked} />
