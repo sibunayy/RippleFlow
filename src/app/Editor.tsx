@@ -15,7 +15,8 @@ import { VideoLibrary, type VideoMode } from "../video/videoLibrary";
 import { MemoryAssets, OpfsAssets, type AssetStore } from "../persist/assets";
 import { serialize } from "../persist/serialize";
 import { addLayer, sequence, setDuration } from "../core/commands";
-import { addShape, newNullLayer, newTextLayer, newImageLayer, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
+import { importSvg } from "../geometry/svgImport";
+import { addShape, newNullLayer, newTextLayer, newImageLayer, newSvgLayers, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Graph } from "./Graph";
@@ -82,6 +83,23 @@ export function Editor() {
       }
     }
     videoInput.value = "";
+  };
+  let svgInput!: HTMLInputElement;
+  const importSvgFiles = async (files: FileList | null) => {
+    for (const file of Array.from(files ?? [])) {
+      try {
+        const svg = importSvg(await file.text());
+        const n = nextLayerNumber(ctrl.document.layers);
+        const layers = newSvgLayers(n, file.name.replace(/\.[^.]+$/, "") || `SVG ${n}`, svg, ctrl.document.width, ctrl.document.height);
+        if (layers.length === 0) throw new Error("nothing drawable in this file");
+        ctrl.execute(sequence(`Import ${file.name}`, layers.map((l) => addLayer(l))));
+        ctrl.setSelection(layers[0]!.id);
+        if (svg.skipped.length) setNotice(`Imported ${layers.length - 1} shapes. Not supported, left out: ${svg.skipped.join(", ")}.`);
+      } catch (e) {
+        setNotice(`Could not import ${file.name}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    svgInput.value = "";
   };
   let fileInput!: HTMLInputElement;
   const importFiles = async (files: FileList | null) => {
@@ -322,6 +340,8 @@ export function Editor() {
         <button onClick={addNull}>Null</button>
         <button onClick={() => fileInput.click()}>Image</button>
         <button onClick={() => videoInput.click()}>Video</button>
+        <button title="Import an SVG as editable shapes" onClick={() => svgInput.click()}>SVG</button>
+        <input ref={svgInput} type="file" accept=".svg,image/svg+xml" hidden onChange={(e) => void importSvgFiles(e.currentTarget.files)} />
         <input ref={videoInput} type="file" accept="video/*,.mov,.mp4,.m4v" hidden onChange={(e) => void importVideos(e.currentTarget.files)} />
         <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => void importFiles(e.currentTarget.files)} />
         <button onClick={del} disabled={(tick(), ctrl.selection === null)}>Delete</button>

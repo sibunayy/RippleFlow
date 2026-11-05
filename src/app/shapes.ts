@@ -2,6 +2,7 @@ import { addLayer } from "../core/commands";
 import type { Command } from "../core/history";
 import { displaySize } from "../geometry/layerGeometry";
 import { nodesToPath, parseNodes, pathBounds, transformPath, type NodePath } from "../geometry/nodes";
+import type { SvgImport } from "../geometry/svgImport";
 import { layoutText } from "../text/glyphs";
 import { translate } from "../core/affine";
 import type { ImageContent, Layer, Rgba, TextContent, Track, VideoContent } from "../core/types";
@@ -167,4 +168,54 @@ export function newTextLayer(n: number, text: string, compW: number, compH: numb
       opacity: empty,
     },
   };
+}
+
+/**
+ * Layers for an imported SVG: a null "group" layer fitted to 70% of the composition, plus one shape layer per
+ * element parented to it, each pivoting about its own centre so pieces animate independently.
+ * Returns [] when the file has nothing drawable.
+ */
+export function newSvgLayers(firstN: number, name: string, svg: SvgImport, compW: number, compH: number): Layer[] {
+  const items = svg.shapes.map((sh) => ({ sh, nodes: parseNodes(sh.path) }));
+  if (items.length === 0) return [];
+  const fit = Math.min((0.7 * compW) / svg.width, (0.7 * compH) / svg.height);
+  const group: Layer = {
+    id: `layer-${firstN}`,
+    name,
+    kind: "shape",
+    transform: {
+      anchorX: still(svg.width / 2),
+      anchorY: still(svg.height / 2),
+      x: still(compW / 2),
+      y: still(compH / 2),
+      scaleX: still(fit),
+      scaleY: still(fit),
+      rotation: empty,
+      opacity: empty,
+    },
+  };
+  const out: Layer[] = [group];
+  items.forEach(({ sh, nodes }, i) => {
+    const b = pathBounds(nodes);
+    if (!b) return;
+    const local = nodes.map((p) => transformPath(p, translate(-b.x, -b.y)));
+    out.push({
+      id: `layer-${firstN + 1 + i}`,
+      name: sh.name,
+      kind: "shape",
+      parent: group.id,
+      shape: { path: nodesToPath(local), ...(sh.fill ? { fill: sh.fill } : {}), ...(sh.stroke ? { stroke: sh.stroke } : {}) },
+      transform: {
+        anchorX: still(b.w / 2),
+        anchorY: still(b.h / 2),
+        x: still(b.x + b.w / 2),
+        y: still(b.y + b.h / 2),
+        scaleX: empty,
+        scaleY: empty,
+        rotation: empty,
+        opacity: empty,
+      },
+    });
+  });
+  return out;
 }
