@@ -1,14 +1,40 @@
 import { multiply, scale, type Affine } from "../core/affine";
+import type { Composition, Rgba } from "../core/types";
+import type { SceneItem } from "../core/scene";
+import type { ShapeGeometry } from "../geometry/layerGeometry";
+import type { Mesh } from "../geometry/mesh";
 import type { Draw } from "../render/meshRenderer";
 import type { EditorController } from "../editor/controller";
 import { worldCorners } from "../editor/handles";
 
-/** Draws for the current frame, in canvas device pixels. Empty meshes are dropped. */
-export function buildDraws(ctrl: EditorController, devicePixelRatio: number): Required<Draw>[] {
-  const toDevice = multiply(scale(devicePixelRatio), ctrl.view);
+export const DEFAULT_BACKGROUND: Rgba = [1, 1, 1, 1];
+
+const rectMeshes = new Map<string, Mesh>();
+/** Shared two-triangle rectangle mesh, so a background draw never re-uploads geometry. */
+function rectMesh(w: number, h: number): Mesh {
+  const key = `${w}x${h}`;
+  let m = rectMeshes.get(key);
+  if (!m) {
+    m = { positions: new Float32Array([0, 0, w, 0, w, h, 0, h]), indices: new Uint32Array([0, 1, 2, 0, 2, 3]) };
+    rectMeshes.set(key, m);
+  }
+  return m;
+}
+
+/** The composition's backdrop as a draw (composition space through `toDevice`). */
+export function backgroundDraw(comp: Composition, toDevice: Affine): Required<Draw> {
+  return { mesh: rectMesh(comp.width, comp.height), color: comp.background ?? DEFAULT_BACKGROUND, transform: toDevice, opacity: 1 };
+}
+
+/** Layer draws for already-evaluated scene items, mapped to device pixels by `toDevice`. Empty meshes are dropped. */
+export function drawsFor(
+  items: readonly SceneItem[],
+  geometryOf: (id: string) => ShapeGeometry | undefined,
+  toDevice: Affine,
+): Required<Draw>[] {
   const out: Required<Draw>[] = [];
-  for (const item of ctrl.scene()) {
-    const g = ctrl.geometryOf(item.id);
+  for (const item of items) {
+    const g = geometryOf(item.id);
     if (!g) continue;
     const transform = multiply(toDevice, item.matrix);
     for (const part of g.parts) {
@@ -17,6 +43,13 @@ export function buildDraws(ctrl: EditorController, devicePixelRatio: number): Re
     }
   }
   return out;
+}
+
+/** Everything to draw for the editor view: backdrop, then layers, in canvas device pixels. */
+export function buildDraws(ctrl: EditorController, devicePixelRatio: number): Required<Draw>[] {
+  const toDevice = multiply(scale(devicePixelRatio), ctrl.view);
+  const comp = ctrl.displayed;
+  return [backgroundDraw(comp, toDevice), ...drawsFor(ctrl.scene(), (id) => ctrl.geometryOf(id), toDevice)];
 }
 
 interface Target {

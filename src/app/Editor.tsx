@@ -7,6 +7,7 @@ import { Autosaver, loadProject, type SaveState } from "../persist/autosave";
 import { MemoryStore, OpfsStore, opfsAvailable, type ProjectStore } from "../persist/store";
 import { addShape, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
+import { ExportDialog } from "./ExportDialog";
 import { Graph } from "./Graph";
 import { Props } from "./Props";
 import { registerServiceWorker } from "./pwa";
@@ -28,6 +29,7 @@ export function Editor() {
   const [picked, setPicked] = createSignal<KeyColumn | null>(null);
   const [saveState, setSaveState] = createSignal<SaveState | "unavailable">("saved");
   const [notice, setNotice] = createSignal<string | null>(null);
+  const [exporting, setExporting] = createSignal(false);
   const [update, setUpdate] = createSignal<(() => void) | null>(null);
   const store: ProjectStore = opfsAvailable() ? new OpfsStore() : new MemoryStore();
   const saver = new Autosaver({ store, id: "autosave", onState: (st) => setSaveState(st) });
@@ -169,6 +171,7 @@ export function Editor() {
         <button onClick={() => ctrl.undo()} disabled={(tick(), !ctrl.canUndo)}>Undo</button>
         <button onClick={() => ctrl.redo()} disabled={(tick(), !ctrl.canRedo)}>Redo</button>
         <span class="sep" />
+        <button onClick={() => { setPlaying(false); setExporting(true); }}>Export</button>
         <span class="save" classList={{ bad: saveState() === "error" || saveState() === "unavailable" }}>
           {({ saved: "Saved", saving: "Saving…", dirty: "Unsaved", error: "Save failed", unavailable: "Not saved: storage unavailable" } as const)[saveState()]}
         </span>
@@ -219,6 +222,9 @@ export function Editor() {
           <p class="error">WebGPU unavailable: {error()}</p>
         </Show>
       </div>
+      <Show when={exporting()}>
+        <ExportDialog comp={() => ctrl.document} onClose={() => setExporting(false)} />
+      </Show>
       <Props ctrl={ctrl} tick={tick} />
       <Timeline ctrl={ctrl} tick={tick} picked={picked} setPicked={setPicked} />
       <footer class="bar">

@@ -126,5 +126,6 @@ export function deserialize(text: string): Composition {
       walk.add(p);
     }
   }
-  return { width: pos(c.width, "width"), height: pos(c.height, "height"), fps: pos(c.fps, "fps"), duration: pos(c.duration, "duration"), layers };
+  const out: Composition = { width: pos(c.width, "width"), height: pos(c.height, "height"), fps: pos(c.fps, "fps"), duration: pos(c.duration, "duration"), layers };
+  return c.background === undefined ? out : { ...out, background: rgba(c.background, "background") };
 }
