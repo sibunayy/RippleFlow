@@ -1,6 +1,6 @@
 import type { Affine } from "./affine";
 import { opacityAt, worldMatrices } from "./layerTransform";
-import type { Composition, Id, Layer } from "./types";
+import type { BlendMode, Composition, Id, Layer } from "./types";
 
 /** One layer, resolved for a single instant: ready for a renderer. */
 export interface SceneItem {
@@ -10,6 +10,7 @@ export interface SceneItem {
   readonly matrix: Affine;
   /** 0..1, this layer only (not inherited). */
   readonly opacity: number;
+  readonly blend: BlendMode;
 }
 
 /**
@@ -29,7 +30,7 @@ export function evaluateScene(comp: Composition, t: number): SceneItem[] {
     const start = layer.inPoint ?? 0;
     const end = layer.outPoint ?? comp.duration;
     if (t < start || t >= end) continue;
-    items.push({ id: layer.id, kind: layer.kind, matrix: matrices.get(layer.id)!, opacity: opacityAt(layer, t) });
+    items.push({ id: layer.id, kind: layer.kind, matrix: matrices.get(layer.id)!, opacity: opacityAt(layer, t), blend: layer.blend ?? "normal" });
   }
   return items;
 }

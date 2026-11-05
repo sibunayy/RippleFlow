@@ -1,3 +1,10 @@
 node_modules
 dist
 *.log
+
+# Repowise (local index and generated editor config)
+.repowise/
+.claude/CLAUDE.md
+.vscode/
+.github/copilot-instructions.md
+.mcp.json

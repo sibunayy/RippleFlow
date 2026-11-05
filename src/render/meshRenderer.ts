@@ -1,5 +1,6 @@
 import { IDENTITY, type Affine } from "../core/affine";
 import type { Mesh } from "../geometry/mesh";
+import type { BlendMode, Gradient } from "../core/types";
 import { Nv12Readback } from "./nv12Readback";
 
 export interface Draw {
@@ -23,6 +24,15 @@ export interface Draw {
    * conversion. Replace it every frame with `setFrame`; the renderer never closes it.
    */
   frame?: VideoFrame;
+  /** Paint this gradient across `bbox` (in the mesh's local coordinates) instead of the flat color. */
+  gradient?: GradientPaint;
+  /** How it combines with what is behind it. Defaults to "normal". */
+  blend?: BlendMode;
+}
+
+export interface GradientPaint {
+  readonly gradient: Gradient;
+  readonly bbox: { readonly x: number; readonly y: number; readonly w: number; readonly h: number };
 }
 
 /** A draw whose transform and opacity are both set. */
@@ -75,6 +85,64 @@ fn fs(i: VOut) -> @location(0) vec4f {
 const EXTERNAL_SHADER = TEXTURED_SHADER.replace("texture_2d<f32>", "texture_external")
   .replace("textureSample(img, samp, i.uv) * u.color.a", "vec4f(textureSampleBaseClampToEdge(img, samp, i.uv).rgb, 1.0) * u.color.a");
 
+// Gradient fill: colour is computed per pixel from the local position, so it stays exact on any triangulation.
+const GRADIENT_SHADER = /* wgsl */ `
+struct U { size: vec2f, pad: vec2f, color: vec4f, m0: vec4f, m1: vec4f, bbox: vec4f, g: vec4f, offs: array<vec4f, 8>, cols: array<vec4f, 8> }
+@group(0) @binding(0) var<uniform> u: U;
+
+struct VOut { @builtin(position) pos: vec4f, @location(0) p: vec2f }
+
+@vertex
+fn vs(@location(0) p: vec2f) -> VOut {
+  let w = vec2f(u.m0.x * p.x + u.m0.z * p.y + u.m1.x, u.m0.y * p.x + u.m0.w * p.y + u.m1.y);
+  var o: VOut;
+  o.pos = vec4f(w.x / u.size.x * 2.0 - 1.0, 1.0 - w.y / u.size.y * 2.0, 0.0, 1.0);
+  o.p = p;
+  return o;
+}
+
+@fragment
+fn fs(i: VOut) -> @location(0) vec4f {
+  let uv = (i.p - u.bbox.xy) / max(u.bbox.zw, vec2f(1e-6));
+  var t: f32;
+  if (u.g.x < 0.5) {
+    let d = vec2f(cos(u.g.y), sin(u.g.y));
+    t = 0.5 + dot(uv - vec2f(0.5), d) / max(abs(d.x) + abs(d.y), 1e-6);
+  } else {
+    t = length(uv - vec2f(0.5)) / 0.70710678;
+  }
+  t = clamp(t, 0.0, 1.0);
+  let n = i32(u.g.z);
+  var c = u.cols[0];
+  for (var k = 1; k < n; k++) {
+    let o0 = u.offs[k - 1].x;
+    let o1 = u.offs[k].x;
+    if (t >= o0) {
+      c = mix(u.cols[k - 1], u.cols[k], clamp((t - o0) / max(o1 - o0, 1e-6), 0.0, 1.0));
+    }
+  }
+  return vec4f(c.rgb * c.a, c.a) * u.color.a;
+}
+`;
+
+type Kind = "solid" | "textured" | "external" | "gradient";
+
+/** Blend state for premultiplied output. The backdrop is always opaque, which keeps multiply exact. */
+function blendState(mode: BlendMode): GPUBlendState {
+  const alpha: GPUBlendComponent = { srcFactor: "one", dstFactor: "one-minus-src-alpha" };
+  switch (mode) {
+    case "multiply":
+      return { color: { srcFactor: "dst", dstFactor: "one-minus-src-alpha" }, alpha };
+    case "screen":
+      return { color: { srcFactor: "one", dstFactor: "one-minus-src" }, alpha };
+    case "add":
+      return { color: { srcFactor: "one", dstFactor: "one" }, alpha };
+    default:
+      return { color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" }, alpha };
+  }
+}
+
+const UNIFORM_FLOATS = 120;
 const SAMPLES = 4;
 
 interface Gpu {
@@ -91,6 +159,8 @@ interface Prepared {
   /** Mesh extent (max x, max y) for texture coordinates; only used by image draws. */
   extent: [number, number];
   textured: boolean;
+  blend: BlendMode;
+  gradient?: GradientPaint;
   /** Current video frame; the draw is skipped until one is set. */
   external: boolean;
   frame?: VideoFrame;
@@ -100,9 +170,10 @@ interface Prepared {
 }
 
 export class MeshRenderer {
-  private pipeline: GPURenderPipeline;
-  private texturedPipeline: GPURenderPipeline;
-  private externalPipeline: GPURenderPipeline;
+  private modules!: Record<Kind, GPUShaderModule>;
+  private layouts!: Record<Kind, GPUBindGroupLayout>;
+  private pipelineLayouts!: Record<Kind, GPUPipelineLayout>;
+  private pipelines = new Map<string, GPURenderPipeline>();
   private sampler: GPUSampler;
   /** Uploaded images by bitmap identity, so editing other layers never re-uploads a photo. */
   private textures = new Map<ImageBitmap, GPUTexture>();
@@ -118,81 +189,44 @@ export class MeshRenderer {
     private ctx: GPUCanvasContext,
     readonly canvas: HTMLCanvasElement,
   ) {
-    const { device, format } = gpu;
-    const module = device.createShaderModule({ code: SHADER });
-    this.pipeline = device.createRenderPipeline({
-      layout: "auto",
-      vertex: {
-        module,
-        entryPoint: "vs",
-        buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }],
-      },
-      fragment: {
-        module,
-        entryPoint: "fs",
-        targets: [
-          {
-            format,
-            blend: {
-              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
-              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
-            },
-          },
-        ],
-      },
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      multisample: { count: SAMPLES },
-    });
-
-    const texModule = device.createShaderModule({ code: TEXTURED_SHADER });
-    this.texturedPipeline = device.createRenderPipeline({
-      layout: "auto",
-      vertex: {
-        module: texModule,
-        entryPoint: "vs",
-        buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }],
-      },
-      fragment: {
-        module: texModule,
-        entryPoint: "fs",
-        targets: [
-          {
-            format,
-            blend: {
-              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
-              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
-            },
-          },
-        ],
-      },
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      multisample: { count: SAMPLES },
-    });
-    const extModule = device.createShaderModule({ code: EXTERNAL_SHADER });
-    this.externalPipeline = device.createRenderPipeline({
-      layout: "auto",
-      vertex: {
-        module: extModule,
-        entryPoint: "vs",
-        buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }],
-      },
-      fragment: {
-        module: extModule,
-        entryPoint: "fs",
-        targets: [
-          {
-            format,
-            blend: {
-              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
-              alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
-            },
-          },
-        ],
-      },
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      multisample: { count: SAMPLES },
-    });
+    const { device } = gpu;
+    const both = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
+    const uniform: GPUBindGroupLayoutEntry = { binding: 0, visibility: both, buffer: { type: "uniform" } };
+    const samp: GPUBindGroupLayoutEntry = { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } };
+    this.layouts = {
+      solid: device.createBindGroupLayout({ entries: [uniform] }),
+      gradient: device.createBindGroupLayout({ entries: [uniform] }),
+      textured: device.createBindGroupLayout({ entries: [uniform, samp, { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } }] }),
+      external: device.createBindGroupLayout({ entries: [uniform, samp, { binding: 2, visibility: GPUShaderStage.FRAGMENT, externalTexture: {} }] }),
+    };
+    this.pipelineLayouts = Object.fromEntries(
+      (Object.keys(this.layouts) as Kind[]).map((k) => [k, device.createPipelineLayout({ bindGroupLayouts: [this.layouts[k]] })]),
+    ) as Record<Kind, GPUPipelineLayout>;
+    this.modules = {
+      solid: device.createShaderModule({ code: SHADER }),
+      textured: device.createShaderModule({ code: TEXTURED_SHADER }),
+      external: device.createShaderModule({ code: EXTERNAL_SHADER }),
+      gradient: device.createShaderModule({ code: GRADIENT_SHADER }),
+    };
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
+  }
+
+  /** Pipelines are made on first use: most scenes only ever need "normal". */
+  private pipelineFor(kind: Kind, blend: BlendMode): GPURenderPipeline {
+    const key = `${kind}:${blend}`;
+    let p = this.pipelines.get(key);
+    if (!p) {
+      const module = this.modules[kind];
+      p = this.gpu.device.createRenderPipeline({
+        layout: this.pipelineLayouts[kind],
+        vertex: { module, entryPoint: "vs", buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }] },
+        fragment: { module, entryPoint: "fs", targets: [{ format: this.gpu.format, blend: blendState(blend) }] },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        multisample: { count: SAMPLES },
+      });
+      this.pipelines.set(key, p);
+    }
+    return p;
   }
 
   private textureFor(bitmap: ImageBitmap): GPUTexture {
@@ -243,23 +277,24 @@ export class MeshRenderer {
           usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
         });
         device.queue.writeBuffer(ibuf, 0, d.mesh.indices as Uint32Array<ArrayBuffer>);
-        const ubuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        const ubuf = device.createBuffer({ size: UNIFORM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         const textured = !!d.image;
         const external = !!d.frame;
+        const gradient = d.image || d.frame ? undefined : d.gradient;
+        const kind: Kind = external ? "external" : textured ? "textured" : gradient ? "gradient" : "solid";
         const bind = external
           ? undefined
-          : textured
-          ? device.createBindGroup({
-              layout: this.texturedPipeline.getBindGroupLayout(0),
+          : device.createBindGroup({
+              layout: this.layouts[kind],
               entries: [
                 { binding: 0, resource: { buffer: ubuf } },
-                { binding: 1, resource: this.sampler },
-                { binding: 2, resource: this.textureFor(d.image!).createView() },
+                ...(textured
+                  ? [
+                      { binding: 1, resource: this.sampler },
+                      { binding: 2, resource: this.textureFor(d.image!).createView() },
+                    ]
+                  : []),
               ],
-            })
-          : device.createBindGroup({
-              layout: this.pipeline.getBindGroupLayout(0),
-              entries: [{ binding: 0, resource: { buffer: ubuf } }],
             });
         const isImage = textured || external;
         let ex = 0;
@@ -277,6 +312,8 @@ export class MeshRenderer {
           bind,
           extent: [ex || 1, ey || 1] as [number, number],
           textured,
+          blend: d.blend ?? "normal",
+          gradient,
           external,
           frame: d.frame,
           count: d.mesh.indices.length,
@@ -375,21 +412,33 @@ export class MeshRenderer {
       ],
     });
     let current: GPURenderPipeline | null = null;
+    const data = new Float32Array(UNIFORM_FLOATS);
     for (const p of this.prepared) {
       if (p.external && !p.frame) continue; // no decoded frame yet
-      const want = p.external ? this.externalPipeline : p.textured ? this.texturedPipeline : this.pipeline;
+      const kind: Kind = p.external ? "external" : p.textured ? "textured" : p.gradient ? "gradient" : "solid";
+      const want = this.pipelineFor(kind, p.blend);
       if (want !== current) {
         pass.setPipeline(want);
         current = want;
       }
       const [a, b, c, d, e, f] = p.transform;
-      const [r, g, bl, al] = p.textured || p.external ? [1, 1, 1, 1] : p.color;
-      device.queue.writeBuffer(p.ubuf, 0, new Float32Array([w, h, p.extent[0], p.extent[1], r, g, bl, al * p.opacity, a, b, c, d, e, f, 0, 0]));
+      const [r, g, bl, al] = p.textured || p.external || p.gradient ? [1, 1, 1, 1] : p.color;
+      data.fill(0);
+      data.set([w, h, p.extent[0], p.extent[1], r, g, bl, al * p.opacity, a, b, c, d, e, f, 0, 0]);
+      if (p.gradient) {
+        const { gradient: gr, bbox } = p.gradient;
+        data.set([bbox.x, bbox.y, bbox.w, bbox.h, gr.kind === "radial" ? 1 : 0, (gr.angle * Math.PI) / 180, gr.stops.length, 0], 16);
+        gr.stops.forEach((st, i) => {
+          data[24 + i * 4] = st.offset;
+          data.set(st.color, 56 + i * 4);
+        });
+      }
+      device.queue.writeBuffer(p.ubuf, 0, data);
       pass.setBindGroup(
         0,
         p.external
           ? device.createBindGroup({
-              layout: this.externalPipeline.getBindGroupLayout(0),
+              layout: this.layouts.external,
               entries: [
                 { binding: 0, resource: { buffer: p.ubuf } },
                 { binding: 1, resource: this.sampler },

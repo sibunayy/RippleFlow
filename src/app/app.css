@@ -41,7 +41,7 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .scrub input { pointer-events: none; }
 .scrub.editing { cursor: text; }
 .scrub.editing input { pointer-events: auto; outline: 2px solid #6a8cff; }
-.props .scrub input { width: 84px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
+.scrub input { width: 84px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
 .bar-range { position: absolute; top: 8px; bottom: 8px; background: #3b4a66; border-radius: 6px; }
 .trim { position: absolute; top: -4px; bottom: -4px; width: 22px; touch-action: none; }
 .trim::after { content: ""; position: absolute; top: 4px; bottom: 4px; width: 6px; background: #8fb4ff; border-radius: 3px; }
@@ -88,3 +88,27 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .plist .pick strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet button.danger { background: #b3402e; }
 .bar .proj { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.workspace { display: flex; flex: 1; min-height: 0; }
+.workspace > .stage { min-width: 0; }
+.bar button.on { outline: 2px solid #4aa3ff; }
+.style { width: 308px; flex: none; box-sizing: border-box; overflow-y: auto; background: #24242b; border-left: 1px solid #34343e; padding: 8px 12px 16px; }
+.style h3 { margin: 0 0 8px; font-size: 13px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.style-body { display: flex; flex-direction: column; gap: 14px; }
+.style-group { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #34343e; }
+.seg { display: flex; flex-direction: column; gap: 2px; }
+.seg .scrub-label { font-size: 11px; }
+.seg-row { display: flex; gap: 2px; }
+.seg button { flex: 1; min-height: 40px; padding: 0 6px; border: 0; background: #34343e; color: inherit; font-size: 13px; text-transform: capitalize; }
+.seg button:first-child { border-radius: 8px 0 0 8px; }
+.seg button:last-child { border-radius: 0 8px 8px 0; }
+.seg button.on { background: #4aa3ff; color: #08121e; font-weight: 600; }
+.swatch { display: flex; flex-direction: column; gap: 2px; font-size: 11px; }
+.swatch input { width: 56px; height: 40px; padding: 2px; border: 0; border-radius: 8px; background: #34343e; }
+.stops { display: flex; flex-direction: column; gap: 10px; }
+.stop { display: grid; grid-template-columns: 56px 1fr 1fr 40px 40px; gap: 6px; align-items: end; }
+.style .scrub input { width: 100%; box-sizing: border-box; }
+.style .scrub { min-width: 0; }
+.style .scrub-grip { display: none; }
+.stop .mini { min-height: 40px; }
+.mini { min-width: 40px; min-height: 40px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 18px; }
+.mini:disabled { opacity: 0.35; }

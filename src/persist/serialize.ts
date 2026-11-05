@@ -1,3 +1,4 @@
+import { BLEND_MODES, MAX_GRADIENT_STOPS, type BlendMode, type Gradient } from "../core/types";
 import type { Bezier, Composition, ImageContent, Keyframe, Layer, Rgba, ShapeContent, Track, Transform, VideoContent } from "../core/types";
 
 /** Bump when the stored shape changes, and add a step to `migrate`. */
@@ -59,10 +60,26 @@ function track(v: unknown, what: string): Track {
 
 const TRACKS: (keyof Transform)[] = ["anchorX", "anchorY", "x", "y", "scaleX", "scaleY", "rotation", "opacity"];
 
+function gradient(v: unknown, what: string): Gradient {
+  if (!isObj(v)) return fail(`${what} must be an object`);
+  const kind = (["linear", "radial"] as const).find((k) => k === v.kind) ?? fail(`${what}.kind must be linear or radial`);
+  if (!Array.isArray(v.stops) || v.stops.length < 2 || v.stops.length > MAX_GRADIENT_STOPS) return fail(`${what}.stops needs 2 to ${MAX_GRADIENT_STOPS} stops`);
+  let prev = -Infinity;
+  const stops = v.stops.map((st, i) => {
+    if (!isObj(st)) return fail(`${what}.stops[${i}] must be an object`);
+    const offset = num(st.offset, `${what}.stops[${i}].offset`);
+    if (offset < 0 || offset > 1 || offset < prev) fail(`${what}.stops must ascend within 0..1`);
+    prev = offset;
+    return { offset, color: rgba(st.color, `${what}.stops[${i}].color`) };
+  });
+  return { kind, angle: v.angle === undefined ? 0 : num(v.angle, `${what}.angle`), stops };
+}
+
 function shape(v: unknown, what: string): ShapeContent {
   if (!isObj(v)) return fail(`${what} must be an object`);
-  const out: { path: string; fill?: Rgba; stroke?: ShapeContent["stroke"] } = { path: str(v.path, `${what}.path`) };
+  const out: { path: string; fill?: Rgba; gradient?: Gradient; stroke?: ShapeContent["stroke"] } = { path: str(v.path, `${what}.path`) };
   if (v.fill !== undefined) out.fill = rgba(v.fill, `${what}.fill`);
+  if (v.gradient !== undefined) out.gradient = gradient(v.gradient, `${what}.gradient`);
   if (v.stroke !== undefined) {
     const s = v.stroke;
     if (!isObj(s)) return fail(`${what}.stroke must be an object`);
@@ -103,6 +120,7 @@ function layer(v: unknown, i: number): Layer {
   const tr = v.transform;
   const transform = Object.fromEntries(TRACKS.map((p) => [p, track(tr[p] ?? { keys: [] }, `${what}.transform.${p}`)])) as unknown as Transform;
   const out: { -readonly [K in keyof Layer]: Layer[K] } = { id: str(v.id, `${what}.id`), name: str(v.name, `${what}.name`), kind, transform };
+  if (v.blend !== undefined) out.blend = (BLEND_MODES as readonly unknown[]).includes(v.blend) ? (v.blend as BlendMode) : fail(`${what}.blend must be one of ${BLEND_MODES.join(", ")}`);
   if (v.parent !== undefined) out.parent = str(v.parent, `${what}.parent`);
   if (v.shape !== undefined) out.shape = shape(v.shape, `${what}.shape`);
   if (v.image !== undefined) out.image = image(v.image, `${what}.image`);

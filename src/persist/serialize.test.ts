@@ -101,3 +101,20 @@ describe("video layers", () => {
     }
   });
 });
+
+describe("style fields", () => {
+  const base = (shape: unknown, extra: object = {}) =>
+    JSON.stringify({ app: "rippleflow", version: 1, composition: { width: 10, height: 10, fps: 30, duration: 1, layers: [{ id: "a", name: "a", kind: "shape", transform: {}, shape, ...extra }] } });
+  const grad = { kind: "linear", angle: 45, stops: [{ offset: 0, color: [1, 0, 0, 1] }, { offset: 1, color: [0, 0, 1, 1] }] };
+  it("round-trips a gradient and a blend mode", () => {
+    const c = deserialize(base({ path: "M0 0 H1 V1 Z", fill: [1, 1, 1, 1], gradient: grad }, { blend: "multiply" }));
+    expect(c.layers[0]!.shape!.gradient).toEqual(grad);
+    expect(c.layers[0]!.blend).toBe("multiply");
+  });
+  it("rejects bad blend modes and malformed gradients", () => {
+    expect(() => deserialize(base({ path: "M0 0" }, { blend: "overlay" }))).toThrow(/blend/);
+    expect(() => deserialize(base({ path: "M0 0", gradient: { ...grad, stops: [grad.stops[0]] } }))).toThrow(/stops/);
+    expect(() => deserialize(base({ path: "M0 0", gradient: { ...grad, stops: [grad.stops[1], grad.stops[0]] } }))).toThrow(/ascend/);
+    expect(() => deserialize(base({ path: "M0 0", gradient: { ...grad, kind: "conic" } }))).toThrow(/kind/);
+  });
+});

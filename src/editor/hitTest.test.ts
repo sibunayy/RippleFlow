@@ -4,7 +4,7 @@ import type { SceneItem } from "../core/scene";
 import { hitTest, type Bounds } from "./hitTest";
 
 const box: Bounds = { x: 0, y: 0, w: 100, h: 100 };
-const item = (id: string, matrix = IDENTITY): SceneItem => ({ id, kind: "shape", matrix, opacity: 1 });
+const item = (id: string, matrix = IDENTITY): SceneItem => ({ id, kind: "shape", matrix, opacity: 1, blend: "normal" });
 const all = () => box;
 
 describe("hitTest", () => {

@@ -41,12 +41,38 @@ export interface Transform {
 
 export type Rgba = readonly [number, number, number, number];
 
+/** How a layer's colours combine with what is behind it. Only modes the GPU's fixed blend stage can do exactly. */
+export type BlendMode = "normal" | "multiply" | "screen" | "add";
+export const BLEND_MODES: readonly BlendMode[] = ["normal", "multiply", "screen", "add"];
+
+export interface GradientStop {
+  /** 0..1 along the gradient. */
+  readonly offset: number;
+  /** Straight RGBA 0..1. */
+  readonly color: Rgba;
+}
+
+/**
+ * Gradient laid over the fill's bounding box. Linear: `angle` is in degrees
+ * clockwise from left-to-right (90 = top to bottom). Radial: centred, reaching the corners.
+ */
+export interface Gradient {
+  readonly kind: "linear" | "radial";
+  readonly angle: number;
+  /** 2 to 8 stops, ascending by offset. */
+  readonly stops: readonly GradientStop[];
+}
+
+export const MAX_GRADIENT_STOPS = 8;
+
 /** Static vector content of a shape layer (animation is on the transform). */
 export interface ShapeContent {
   /** SVG path data, in the layer's local coordinates. */
   readonly path: string;
   /** Straight RGBA 0..1. Omit for no fill. */
   readonly fill?: Rgba;
+  /** When present it is painted instead of `fill` (which is kept so switching back restores the colour). */
+  readonly gradient?: Gradient;
   readonly stroke?: {
     readonly color: Rgba;
     readonly width: number;
@@ -84,6 +110,8 @@ export interface Layer {
   readonly name: string;
   readonly kind: "shape" | "image" | "video";
   readonly parent?: Id;
+  /** Defaults to "normal". */
+  readonly blend?: BlendMode;
   readonly transform: Transform;
   /** Present on shape layers. */
   readonly shape?: ShapeContent;
