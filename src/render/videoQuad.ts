@@ -149,7 +149,13 @@ export class VideoQuadRenderer {
       } else {
         const tex = this.ensureFrameTexture(w, h);
         if (mode === "cpu") {
-          const buf = new Uint8Array(frame.allocationSize({ format: "RGBA" }));
+          const need = w * h * 4;
+          const size = frame.allocationSize({ format: "RGBA" });
+          if (size !== need) {
+            // Safari ignores the requested format and returns the frame's native layout.
+            throw new Error(`VideoFrame.copyTo cannot convert to RGBA here (native format ${frame.format}, ${size} bytes, need ${need})`);
+          }
+          const buf = new Uint8Array(size);
           await frame.copyTo(buf, { format: "RGBA" });
           this.device.queue.writeTexture({ texture: tex }, buf, { bytesPerRow: w * 4 }, [w, h]);
         } else if (mode === "bitmap") {

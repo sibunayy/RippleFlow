@@ -11,25 +11,37 @@ software GPU: it can check logic and correctness, not speed or real-GPU behaviou
 | MP4 export | iPad | 1080p60, 10 s, 12 Mbps, GPU readback: 600 frames in 3.85 s = **156 fps average (2.6x real time)**. Per-second frames: 92, 176, 180, 152 (last is a partial second). Encoder backpressure 0, max queue 2. 7.9 MB output (about 6.3 Mbps, simple scene). Canvas-to-VideoFrame also works but is slower. |
 | MP4 export | Container | Valid H.264 High 4.2 at 1080p60 (ffprobe). Canvas mode gave black frames here; readback correct. Environment limit. |
 | Video into WebGPU | Container | Decode and frame-accurate seeking verified (24 random seeks, 0 wrong frames, mean 55 ms, p95 68 ms). CPU upload and ImageBitmap upload verified. `copyExternalImageToTexture` from a VideoFrame and `importExternalTexture` destroy the device in this environment. 6 simultaneous decoders succeeded (decode only). |
-| Video into WebGPU | iPad | **Not yet run.** Open `/video.html`. |
-| Pencil and touch | iPad | Not started. |
+| Video into WebGPU | iPad | Run on the exported 1080p60 H.264 clip (not the coded test clip, so picture correctness and seek accuracy were **not** verified: see below). Decode: 600 frames in 806 ms = **744 fps**. Upload paths, 1080p, per frame including GPU wait: `importExternalTexture` **0.82 ms** (682 fps sequential), `copyExternalImageToTexture` 6.8 ms (143 fps), `ImageBitmap` 17 ms (58 fps). **All three GPU paths ran without error.** The CPU path failed: Safari's `VideoFrame.copyTo` ignored the RGBA request (buffer was 3,110,400 bytes = 1920x1080x1.5, a native YUV 4:2:0 size). 1, 2, 4 and 6 simultaneous decoders all worked at about 650 fps combined (decode only). |
+| Pencil and touch | iPad (UA: WebKit "Version/27.2", Brave; reports as a Mac) | **Pencil:** pressure 0.004 to 1.0 with 514+ distinct levels; tiltX -7..48, tiltY -21..53; altitude 0.57..1.47 rad; azimuth full range; twist always 0; contact size constant 0.5. About 250 samples/s (4 ms median). **Each delivered pointermove carried about 4 coalesced events** (mean 3.99), consistent with a 60 Hz display (not measured). `getCoalescedEvents` and `getPredictedEvents` exist (predicted not exercised); `pointerrawupdate` does not. **Touch:** pressure always 0, contact size 63 to 104 px, about 111 events/s. 0 touch pointerdowns while the pen was down (meaningful only if the palm was resting). Event to frame callback: median 5 ms, p95 7 ms (not photon latency). No cancelled strokes. Two-finger pinch/rotate worked. Not run: standalone (home screen) mode, Safari proper. |
 
 ## What this means for the plan
 
 - Export is a low risk: large headroom at 1080p60 on a simple scene. Open: thermal behaviour over 30 s or more, and heavier scenes.
 - Use GPU readback as the primary export frame source; keep canvas-to-VideoFrame as a fallback.
-- Video layers are feasible in principle (decode and seeking work), but the GPU upload path on Safari is **unknown** until the iPad run. The CPU path (`frame.copyTo` + `writeTexture`) is the guaranteed fallback and costs about 28 ms per 1080p frame in the container, so it is not a viable path for real-time multi-layer playback.
+- Video layers look feasible: on the iPad `importExternalTexture` takes under 1 ms per 1080p frame and decode runs at about 12x real time for 1080p60. Use `importExternalTexture` as the primary path; `copyExternalImageToTexture` is a reasonable fallback (about 7 ms).
+- Not yet shown on the iPad: that the pictures are correct (the first run's check could not tell a white frame from the clear colour; fixed), frame-accurate seeking, and seek latency. Re-run `/video.html` **without picking a file** to use the coded clip.
+- The CPU path is not available on Safari (no format conversion in `copyTo`). A YUV-to-RGB shader would be needed if a CPU fallback is ever required.
+- Decode limits were not reached at 6 concurrent 1080p60 streams, but that was one H.264 clip, decode only. HEVC, 4K and mixed content are untested.
+
+## Pencil and touch: design rules
+
+- Read `getCoalescedEvents()` for ink; ignoring it cuts stroke resolution from about 250 Hz to the delivery rate.
+- Identify the Pencil with `pointerType === "pen"` at runtime. The primary pointer reports as coarse (`(pointer: fine)` false); only `(any-pointer: fine)` is true. Do not rely on media queries or the user agent (the iPad reports as a Mac).
+- Pen draws and selects; touch navigates (two-finger pan, zoom, rotate). Finger pressure is always 0 so it cannot drive anything. Finger contact size is available.
+- No hover and no twist on this hardware.
 
 ## Findings worth keeping
 
 - WGSL reserves `target` as a keyword; a struct field with that name makes the pipeline invalid.
 - WebGPU `popErrorScope()` rejects with "Instance dropped" when the device has been destroyed. Catch it separately so it never hides the original error.
 - Keep a reference to the GPU adapter for the renderer's lifetime. Chromium's readback failed while a canvas render loop was running; cause not found.
+- Safari's `VideoFrame.copyTo` / `allocationSize` do not honour a `format` option; they use the native layout.
+- A readback check against a magenta clear colour cannot tell a white or magenta picture from "nothing drawn". Check for non-clear pixels, or use a coded clip.
 - `mp4-muxer` is deprecated; Mediabunny is used for demuxing/decoding here and should replace it for muxing.
 
 ## Open questions
 
-1. Which upload paths work on iPad Safari, and how fast (`/video.html`).
+1. iPad: correct picture and frame-accurate seeking with the coded clip, and seek latency (`/video.html`, no file picked). HEVC and 4K phone clips.
 2. Throttling on a 30 s or longer export, and on a heavier scene.
 3. How many simultaneous video decoders iPadOS allows.
-4. Pencil: what pointer data Safari really delivers (pressure, tilt, palm rejection).
+4. Pencil: palm rejection with the palm actually resting; whether `getPredictedEvents` returns usable points; display refresh rate; true input-to-photon latency; behaviour in standalone mode in Safari (not Brave).
