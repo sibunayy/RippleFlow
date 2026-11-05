@@ -72,3 +72,4 @@ Export colour: the encoder's own colour tags cannot be trusted (Safari tags full
 
 Auto-key: a property with no keys gets a base keyframe at 0 holding its old value before its first keyframe after time 0 (a lone keyframe would just hold its value at every time and nothing would animate). Position already had a base key from layer creation, which is why it was the only property that animated before this was fixed.
 The toolbar shows the build id (git short sha), so a device can say which version produced a file.
+Export checks must include 1080p, not just 720p: 1280 is a multiple of 256 so GPU row padding vanishes, 1920 is not. Safari mishandled padded NV12 `layout`; frames are now tightly packed with no layout. Set `PRESET="1080p · 30 fps"` for scripts/run-export-app.mjs, run-image.mjs, run-video-layer.mjs (and `COMPAT=1` for compatibility mode).

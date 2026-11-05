@@ -28,3 +28,38 @@ describe("rgbToYuv709Limited", () => {
     }
   });
 });
+
+import { packNv12Tight } from "./nv12Readback";
+
+describe("packNv12Tight", () => {
+  /** A padded readback where every byte encodes where it should end up: row, column, and plane. */
+  const padded = (w: number, h: number, stride: number) => {
+    const raw = new Uint8Array((stride * h * 3) / 2).fill(0xee); // 0xee = padding that must never leak through
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) raw[r * stride + c] = (r * 7 + c) & 0x7f; // Y
+    for (let r = 0; r < h / 2; r++) for (let c = 0; c < w; c++) raw[stride * h + r * stride + c] = 0x80 | ((r * 5 + c) & 0x7f); // CbCr
+    return raw;
+  };
+
+  it("removes row padding from both planes (1080p-like: width not a multiple of 256)", () => {
+    const [w, h, stride] = [20, 8, 256];
+    const out = packNv12Tight(padded(w, h, stride), stride, w, h);
+    expect(out.length).toBe((w * h * 3) / 2);
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) expect(out[r * w + c]).toBe((r * 7 + c) & 0x7f);
+    for (let r = 0; r < h / 2; r++) for (let c = 0; c < w; c++) expect(out[w * h + r * w + c]).toBe(0x80 | ((r * 5 + c) & 0x7f));
+    expect(out.includes(0xee)).toBe(false);
+  });
+
+  it("is a straight copy when there is no padding (720p-like)", () => {
+    const [w, h] = [16, 4];
+    const raw = padded(w, h, w);
+    expect([...packNv12Tight(raw, w, w, h)]).toEqual([...raw]);
+  });
+
+  it("returns a new buffer, safe to keep after the GPU buffer is unmapped", () => {
+    const raw = padded(8, 4, 256);
+    const out = packNv12Tight(raw, 256, 8, 4);
+    raw.fill(0);
+    expect(out[0]).toBe(0);
+    expect(out[9]).toBe((1 * 7 + 1) & 0x7f);
+  });
+});

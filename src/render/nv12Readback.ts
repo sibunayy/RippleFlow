@@ -39,9 +39,32 @@ fn fsUV(@builtin(position) pos: vec4f) -> @location(0) vec4f {
 }
 `;
 
+/**
+ * Copy NV12 planes out of a GPU readback (rows padded to `stride` bytes) into a
+ * tightly packed buffer: Y (width x height), then interleaved CbCr (width x height/2).
+ *
+ * WebGPU forces row padding (256 bytes) that only vanishes when the width is a
+ * multiple of 256, so 1080p (1920 wide, padded to 2048) always has it. Chromium
+ * honours a padded `layout` on a VideoFrame, but Safari did not: it read the rows
+ * as if tightly packed and the picture came out sheared into streaks. A tight
+ * buffer with the default layout means nothing depends on how a browser treats strides.
+ */
+export function packNv12Tight(raw: Uint8Array, stride: number, width: number, height: number): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(new ArrayBuffer((width * height * 3) / 2));
+  if (stride === width) {
+    out.set(raw.subarray(0, out.length));
+    return out;
+  }
+  for (let r = 0; r < height; r++) out.set(raw.subarray(r * stride, r * stride + width), r * width);
+  const uvIn = stride * height;
+  const uvOut = width * height;
+  for (let r = 0; r < height / 2; r++) out.set(raw.subarray(uvIn + r * stride, uvIn + r * stride + width), uvOut + r * width);
+  return out;
+}
+
 export class Nv12Readback {
-  /** Bytes per row of both planes in the data returned by read() (rows are padded to 256). */
-  readonly stride: number;
+  /** Bytes per row of both planes in the GPU readback (padded to 256). Not exposed in the data read() returns. */
+  private readonly stride: number;
   private src: GPUTexture;
   private yTex: GPUTexture;
   private uvTex: GPUTexture;
@@ -81,7 +104,7 @@ export class Nv12Readback {
     this.uvBind = device.createBindGroup({ layout: this.uvPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: view }] });
   }
 
-  /** Render the scene and return the NV12 planes: Y (stride x height) followed by interleaved CbCr (stride x height/2). */
+  /** Render the scene and return tightly packed NV12: Y (width x height) followed by interleaved CbCr (width x height/2). */
   async read(): Promise<Uint8Array<ArrayBuffer>> {
     const { device, width: w, height: h, stride } = this;
     const enc = device.createCommandEncoder();
@@ -99,7 +122,7 @@ export class Nv12Readback {
     enc.copyTextureToBuffer({ texture: this.uvTex }, { buffer: this.buf, offset: stride * h, bytesPerRow: stride }, [w / 2, h / 2]);
     device.queue.submit([enc.finish()]);
     await this.buf.mapAsync(GPUMapMode.READ);
-    const out = new Uint8Array(this.buf.getMappedRange().slice(0));
+    const out = packNv12Tight(new Uint8Array(this.buf.getMappedRange()), stride, w, h);
     this.buf.unmap();
     return out;
   }

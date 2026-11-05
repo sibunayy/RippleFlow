@@ -72,3 +72,4 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .sheet .warn { color: #ff9a8a; }
 .sheet .preview { width: 100%; border-radius: 8px; background: #000; }
 .props .slider { width: 120px; min-height: 28px; padding: 0; }
+.sheet .compat { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; opacity: 0.8; margin: 8px 0; line-height: 1.35; }
