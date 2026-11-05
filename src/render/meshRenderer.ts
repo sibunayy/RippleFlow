@@ -79,7 +79,7 @@ fn fs() -> @location(0) vec4f {
 }
 `;
 
-// Same vertex stage; `pad` carries the mesh extent so uv = position / extent.
+// Same vertex stage, plus a texture coordinate per vertex (position / extent unless the mesh brings its own).
 const TEXTURED_SHADER = /* wgsl */ `
 struct U { size: vec2f, extent: vec2f, color: vec4f, m0: vec4f, m1: vec4f }
 @group(0) @binding(0) var<uniform> u: U;
@@ -89,11 +89,11 @@ struct U { size: vec2f, extent: vec2f, color: vec4f, m0: vec4f, m1: vec4f }
 struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
 
 @vertex
-fn vs(@location(0) p: vec2f) -> VOut {
+fn vs(@location(0) p: vec2f, @location(1) t: vec2f) -> VOut {
   let w = vec2f(u.m0.x * p.x + u.m0.z * p.y + u.m1.x, u.m0.y * p.x + u.m0.w * p.y + u.m1.y);
   var o: VOut;
   o.pos = vec4f(w.x / u.size.x * 2.0 - 1.0, 1.0 - w.y / u.size.y * 2.0, 0.0, 1.0);
-  o.uv = p / u.extent;
+  o.uv = t;
   return o;
 }
 
@@ -194,6 +194,21 @@ interface Prepared {
   opacity: number;
 }
 
+/** (x, y, u, v) per vertex. Texture coordinates come from the mesh, or default to position over extent. */
+function interleave(mesh: Mesh, ex: number, ey: number): Float32Array {
+  const n = mesh.positions.length / 2;
+  const out = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const x = mesh.positions[i * 2]!;
+    const y = mesh.positions[i * 2 + 1]!;
+    out[i * 4] = x;
+    out[i * 4 + 1] = y;
+    out[i * 4 + 2] = mesh.uvs ? mesh.uvs[i * 2]! : x / ex;
+    out[i * 4 + 3] = mesh.uvs ? mesh.uvs[i * 2 + 1]! : y / ey;
+  }
+  return out;
+}
+
 export class MeshRenderer {
   private modules!: Record<Kind, GPUShaderModule>;
   private layouts!: Record<Kind, GPUBindGroupLayout>;
@@ -245,7 +260,15 @@ export class MeshRenderer {
       const module = this.modules[kind];
       p = this.gpu.device.createRenderPipeline({
         layout: this.pipelineLayouts[kind],
-        vertex: { module, entryPoint: "vs", buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }] },
+        vertex: {
+          module,
+          entryPoint: "vs",
+          buffers: [
+            kind === "textured" || kind === "external"
+              ? { arrayStride: 16, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }, { shaderLocation: 1, offset: 8, format: "float32x2" }] }
+              : { arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] },
+          ],
+        },
         fragment: { module, entryPoint: "fs", targets: [{ format: this.gpu.format, blend: blendState(blend) }] },
         primitive: { topology: "triangle-list", cullMode: "none" },
         multisample: { count: SAMPLES },
@@ -293,11 +316,22 @@ export class MeshRenderer {
     this.prepared = draws
       .filter((d) => d.mesh.indices.length > 0)
       .map((d) => {
+        const isImage = !!d.image || !!d.frame;
+        let ex = 0;
+        let ey = 0;
+        if (isImage) {
+          for (let i = 0; i < d.mesh.positions.length; i += 2) {
+            ex = Math.max(ex, d.mesh.positions[i]!);
+            ey = Math.max(ey, d.mesh.positions[i + 1]!);
+          }
+        }
+        // Picture draws carry (x, y, u, v) per vertex; everything else just (x, y).
+        const verts: Float32Array = isImage ? interleave(d.mesh, ex || 1, ey || 1) : d.mesh.positions;
         const vbuf = device.createBuffer({
-          size: d.mesh.positions.byteLength,
+          size: verts.byteLength,
           usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
-        device.queue.writeBuffer(vbuf, 0, d.mesh.positions as Float32Array<ArrayBuffer>);
+        device.queue.writeBuffer(vbuf, 0, verts as Float32Array<ArrayBuffer>);
         const ibuf = device.createBuffer({
           size: d.mesh.indices.byteLength,
           usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
@@ -322,15 +356,6 @@ export class MeshRenderer {
                   : []),
               ],
             });
-        const isImage = textured || external;
-        let ex = 0;
-        let ey = 0;
-        if (isImage) {
-          for (let i = 0; i < d.mesh.positions.length; i += 2) {
-            ex = Math.max(ex, d.mesh.positions[i]!);
-            ey = Math.max(ey, d.mesh.positions[i + 1]!);
-          }
-        }
         return {
           vbuf,
           ibuf,
@@ -358,6 +383,13 @@ export class MeshRenderer {
         this.textures.delete(bitmap);
       }
     }
+  }
+
+  /** New vertex positions for a picture draw whose mesh keeps its size (a warped picture). */
+  setMesh(index: number, mesh: Mesh): void {
+    const p = this.prepared[index];
+    if (!p || !p.textured) return;
+    this.gpu.device.queue.writeBuffer(p.vbuf, 0, interleave(mesh, p.extent[0], p.extent[1]) as Float32Array<ArrayBuffer>);
   }
 
   /** Update the effect group of draw `index` (values change every frame; membership is fixed by setScene). */

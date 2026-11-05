@@ -5,6 +5,7 @@ import type { SceneItem } from "../core/scene";
 import type { ShapeGeometry } from "../geometry/layerGeometry";
 import type { FrameRef } from "../video/videoLibrary";
 import { rectMesh } from "../geometry/rect";
+import { warpMesh } from "../geometry/warp";
 import type { Draw, GroupInfo, PlacedDraw } from "../render/meshRenderer";
 import { scaleSpatial } from "../core/effects";
 import type { EditorController } from "../editor/controller";
@@ -43,6 +44,7 @@ function layerDraws(item: SceneItem, g: ShapeGeometry, toDevice: Affine, mediaOf
       mesh = part.strokeAt(sx, sy);
       base = multiply(base, [1 / sx, 0, 0, 1 / sy, 0, 0]);
     }
+    if (part.warp && item.pins?.length) mesh = { ...warpMesh(part.warp.w, part.warp.h, item.pins), key: item.id };
     if (mesh.indices.length === 0) continue;
     const transform = part.local ? multiply(base, part.local) : base;
     if (part.video) {
@@ -128,6 +130,7 @@ interface Target {
   setScene(draws: readonly Draw[]): void;
   setTransform(index: number, m: Affine, opacity: number): void;
   setFrame(index: number, frame: VideoFrame | undefined): void;
+  setMesh?(index: number, mesh: Mesh): void;
   setGroup?(index: number, group: GroupInfo | undefined): void;
 }
 
@@ -135,13 +138,18 @@ interface Target {
  * Uploads geometry only when the set of meshes (or colors) changes; a moving
  * layer or a pan/zoom only rewrites the 64-byte uniforms.
  */
+/** Same mesh, or the same warped picture with new vertex positions (updated in place, no re-upload of the scene). */
+function sameMesh(a: Mesh, b: Mesh): boolean {
+  return a === b || (a.key !== undefined && a.key === b.key && a.positions.length === b.positions.length);
+}
+
 export class SceneSync {
   private last: PlacedDraw[] = [];
 
   sync(target: Target, draws: PlacedDraw[]): "scene" | "transforms" {
     const same =
       draws.length === this.last.length &&
-      draws.every((d, i) => d.mesh === this.last[i]!.mesh && d.image === this.last[i]!.image && d.gradient === this.last[i]!.gradient && d.group?.id === this.last[i]!.group?.id && JSON.stringify(d.role) === JSON.stringify(this.last[i]!.role) && d.blend === this.last[i]!.blend && !d.frame === !this.last[i]!.frame && d.color.every((c, k) => c === this.last[i]!.color[k]));
+      draws.every((d, i) => sameMesh(d.mesh, this.last[i]!.mesh) && d.image === this.last[i]!.image && d.gradient === this.last[i]!.gradient && d.group?.id === this.last[i]!.group?.id && JSON.stringify(d.role) === JSON.stringify(this.last[i]!.role) && d.blend === this.last[i]!.blend && !d.frame === !this.last[i]!.frame && d.color.every((c, k) => c === this.last[i]!.color[k]));
     if (!same) {
       target.setScene(draws);
       this.last = draws;
@@ -150,6 +158,7 @@ export class SceneSync {
     draws.forEach((d, i) => {
       if (d.frame) target.setFrame(i, d.frame); // a new video frame is a texture swap, not a geometry upload
       target.setTransform(i, d.transform, d.opacity);
+      if (d.mesh.key !== undefined && d.mesh !== this.last[i]!.mesh) target.setMesh?.(i, d.mesh); // warped picture: new vertices, same buffers
       if (d.group) target.setGroup?.(i, d.group);
     });
     this.last = draws;

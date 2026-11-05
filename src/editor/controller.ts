@@ -14,6 +14,7 @@ import { addLayer, addMask, editShape, patchMask } from "../core/commands";
 import { newPathLayer, nextLayerNumber } from "../app/shapes";
 import { newMask } from "./maskEdit";
 import { PenTool } from "./penTool";
+import { addPin, movePin, removePin } from "./pinEdit";
 import { deleteNode, isSmooth, nodesToPath, parseNodes, setCorner, setSmooth, transformPath, type NodePath } from "../geometry/nodes";
 import { NodeTool, type NodeContext, type NodeOutput, type NodeSel } from "./nodeTool";
 import { SelectTool, type ToolContext, type ToolOutput } from "./selectTool";
@@ -49,6 +50,9 @@ export class EditorController {
   private pointMaskId: string | null = null;
   private readonly pen = new PenTool();
   private penTargetState: PenTarget | null = null;
+  private pinModeOn = false;
+  private pinSelected: string | null = null;
+  private pinDrag: { pointer: number; pin: string } | null = null;
   private parsed: { d: string; paths: NodePath[] } | null = null;
 
   /** Playhead, seconds. */
@@ -127,6 +131,85 @@ export class EditorController {
     this.emit();
   }
 
+  // ---- Puppet pins -------------------------------------------------------------
+
+  /** True while the pen places and pulls puppet pins on the selected picture. */
+  get pinMode(): boolean {
+    return this.pinModeOn;
+  }
+  get selectedPin(): string | null {
+    return this.pinSelected;
+  }
+  setPinMode(on: boolean): void {
+    this.pinModeOn = on;
+    this.pinSelected = null;
+    this.pinDrag = null;
+    this.dropPreview();
+    if (on) {
+      this.setPointEdit(false);
+      this.cancelPen();
+    }
+    this.emit();
+  }
+
+  /** The selected picture and where it is now, when pin mode is usable. */
+  private pinLayer(): { id: Id; matrix: Affine; pins: readonly { x: number; y: number; dx: number; dy: number }[] } | null {
+    const id = this.tool.selection;
+    if (!this.pinModeOn || !id || !this.document.layers.find((l) => l.id === id)?.image) return null;
+    const item = evaluateScene(this.displayed, this.time).find((i) => i.id === id);
+    return item ? { id, matrix: item.matrix, pins: item.pins ?? [] } : null;
+  }
+
+  /** Pins as they are drawn now (rest plus pull), in canvas pixels. */
+  pinOverlay(): { id: string; x: number; y: number; selected: boolean }[] | null {
+    const l = this.pinLayer();
+    if (!l) return null;
+    const ids = this.displayed.layers.find((x) => x.id === l.id)?.image?.pins ?? [];
+    const m = multiply(this.view, l.matrix);
+    return l.pins.map((p, i) => {
+      const [x, y] = apply(m, p.x + p.dx, p.y + p.dy);
+      return { id: ids[i]!.id, x, y, selected: ids[i]!.id === this.pinSelected };
+    });
+  }
+
+  deleteSelectedPin(): void {
+    const l = this.pinLayer();
+    if (!l || !this.pinSelected) return;
+    const id = this.pinSelected;
+    this.pinSelected = null;
+    this.execute(removePin(l.id, id));
+  }
+
+  private pinEvent(kind: "down" | "move" | "up", p: PointerInput): void {
+    const l = this.pinLayer();
+    const inv = l ? invert(l.matrix) : null;
+    if (!l || !inv) return;
+    const [cx, cy] = this.screenToComp(p.x, p.y);
+    const [x, y] = apply(inv, cx, cy);
+    if (kind === "down") {
+      const screen = this.pinOverlay() ?? [];
+      const hit = screen.find((s) => Math.hypot(s.x - p.x, s.y - p.y) <= 24);
+      if (hit) {
+        this.pinSelected = hit.id;
+        this.pinDrag = { pointer: p.id, pin: hit.id };
+      } else {
+        const id = `pin${Date.now().toString(36)}${Math.random().toString(36).slice(2, 4)}`;
+        this.pinSelected = id;
+        this.execute(addPin(l.id, { id, x, y }));
+      }
+      return this.emit();
+    }
+    const d = this.pinDrag;
+    if (!d || d.pointer !== p.id) return;
+    const pin = this.document.layers.find((q) => q.id === l.id)?.image?.pins?.find((q) => q.id === d.pin);
+    if (!pin) return;
+    const cmd = movePin(l.id, d.pin, x - pin.x, y - pin.y, this.time, this.autoKey);
+    if (kind === "move") return this.setPreview(cmd);
+    this.pinDrag = null;
+    this.dropPreview();
+    this.execute(cmd);
+  }
+
   // ---- Pen tool ----------------------------------------------------------
 
   /** What the pen is drawing: a new shape layer, or a mask on a layer. Null when the pen is off. */
@@ -139,6 +222,7 @@ export class EditorController {
   startPen(target: PenTarget): void {
     this.pen.clear();
     this.penTargetState = target;
+    this.pinModeOn = false;
     this.setPointEdit(false);
   }
   cancelPen(): void {
@@ -391,6 +475,7 @@ export class EditorController {
       this.gesture.down(p.id, p.x, p.y);
       return;
     }
+    if (this.pinModeOn) return this.pinEvent("down", p);
     if (this.penTargetState) return this.penEvent("down", p);
     const pl = this.pointLayer();
     const nc = pl ? this.nodeContext(pl) : null;
@@ -411,6 +496,7 @@ export class EditorController {
       }
       return;
     }
+    if (this.pinModeOn) return this.pinEvent("move", p);
     if (this.penTargetState) return this.penEvent("move", p);
     if (this.nodeTool.dragging) return this.nodeEvent("move", p);
     this.route(this.tool.move(p.id, this.toolEvent(p), this.toolContext()));
@@ -421,6 +507,7 @@ export class EditorController {
       this.gesture.up(p.id);
       return;
     }
+    if (this.pinModeOn) return this.pinEvent("up", p);
     if (this.penTargetState) return this.penEvent("up", p);
     if (this.nodeTool.dragging) return this.nodeEvent("up", p);
     this.route(this.tool.up(p.id, this.toolEvent(p), this.toolContext()));

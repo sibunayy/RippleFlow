@@ -128,7 +128,19 @@ export interface ShapeContent {
 }
 
 /** Reference to an imported picture. The bytes live in the asset store under `asset`. */
+/** A puppet pin: pulls the picture near (x, y) by (dx, dy). Offsets are keyframable. */
+export interface Pin {
+  readonly id: Id;
+  /** Resting position in the picture, pixels. */
+  readonly x: number;
+  readonly y: number;
+  readonly dx: Track;
+  readonly dy: Track;
+}
+
 export interface ImageContent {
+  /** Puppet pins that deform the picture. */
+  readonly pins?: readonly Pin[];
   /** Content hash (lowercase hex). */
   readonly asset: string;
   /** Size of the decoded picture in pixels, which is also its size in composition units at scale 1. */

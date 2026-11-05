@@ -43,6 +43,18 @@ describe("SceneSync", () => {
   });
 });
 
+describe("SceneSync with warped pictures", () => {
+  it("updates a warped mesh in place instead of re-uploading the scene", () => {
+    const mk = (x: number) => ({ mesh: { positions: new Float32Array([0, 0, x, 0, x, 5]), indices: new Uint32Array([0, 1, 2]), key: "w" }, color: [1, 1, 1, 1] as const, transform: [1, 0, 0, 1, 0, 0] as const, opacity: 1 });
+    const t = { setScene: vi.fn(), setTransform: vi.fn(), setFrame: vi.fn(), setMesh: vi.fn() };
+    const s = new SceneSync();
+    expect(s.sync(t, [mk(10)])).toBe("scene");
+    expect(s.sync(t, [mk(12)])).toBe("transforms");
+    expect(t.setScene).toHaveBeenCalledTimes(1);
+    expect(t.setMesh).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("selectionCorners", () => {
   it("is null with no selection and tracks the view otherwise", () => {
     const c = make();

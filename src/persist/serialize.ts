@@ -168,7 +168,15 @@ function image(v: unknown, what: string): ImageContent {
   if (!isObj(v)) return fail(`${what} must be an object`);
   const asset = str(v.asset, `${what}.asset`);
   if (!/^[0-9a-f]{16,64}$/.test(asset)) fail(`${what}.asset must be a lowercase hex content hash`);
-  return { asset, width: pos(v.width, `${what}.width`), height: pos(v.height, `${what}.height`) };
+  const out: { -readonly [K in keyof ImageContent]: ImageContent[K] } = { asset, width: pos(v.width, `${what}.width`), height: pos(v.height, `${what}.height`) };
+  if (v.pins !== undefined) {
+    if (!Array.isArray(v.pins) || v.pins.length > 64) return fail(`${what}.pins must be an array of at most 64 pins`);
+    out.pins = v.pins.map((p, i) => {
+      if (!isObj(p)) return fail(`${what}.pins[${i}] must be an object`);
+      return { id: str(p.id, `${what}.pins[${i}].id`), x: num(p.x, `${what}.pins[${i}].x`), y: num(p.y, `${what}.pins[${i}].y`), dx: track(p.dx ?? { keys: [] }, `${what}.pins[${i}].dx`), dy: track(p.dy ?? { keys: [] }, `${what}.pins[${i}].dy`) };
+    });
+  }
+  return out;
 }
 
 function video(v: unknown, what: string): VideoContent {
