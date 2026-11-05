@@ -1,6 +1,7 @@
 import { exportMp4, type ExportResult } from "../export/encodeMp4";
 import { MeshRenderer } from "../render/meshRenderer";
-import { buildLogo } from "./logo";
+import { multiply, rotate, scale as scaleM, translate } from "../core/affine";
+import { buildLogo, LOGO_SIZE } from "./logo";
 
 declare global {
   interface Window {
@@ -34,33 +35,19 @@ async function run() {
   try {
     const renderer = await MeshRenderer.create(canvas);
     renderer.clearColor = { r: 1, g: 1, b: 1, a: 1 };
-    const scale = Math.min(width, height) / 512;
-    const draws = buildLogo(scale);
-    renderer.setScene(draws);
+    // Tessellate once in local space; every frame only updates a transform.
+    const fit = Math.min(width, height) / LOGO_SIZE;
+    renderer.setScene(buildLogo(fit));
     const readback = mode === "readback" ? renderer.createReadback() : null;
 
-    // Rotate the whole logo about the canvas centre each frame. This changes every
-    // edge pixel, so the encoder does real work, unlike a static scene.
-    const base = draws.map((d) => d.mesh.positions);
-    const scratch = base.map((p) => new Float32Array(p.length));
-    const cx = (512 * scale) / 2;
-    const cy = cx;
-    const tx = width / 2;
-    const ty = height / 2;
+    const half = LOGO_SIZE / 2;
     const animate = (t: number) => {
-      const a = t * (Math.PI / 2); // 90 degrees per second
-      const c = Math.cos(a);
-      const s = Math.sin(a);
-      base.forEach((p, i) => {
-        const o = scratch[i]!;
-        for (let k = 0; k < p.length; k += 2) {
-          const x = p[k]! - cx;
-          const y = p[k + 1]! - cy;
-          o[k] = tx + x * c - y * s;
-          o[k + 1] = ty + x * s + y * c;
-        }
-        renderer.updatePositions(i, o);
-      });
+      const angle = t * (Math.PI / 2); // 90 degrees per second
+      const m = multiply(
+        translate(width / 2, height / 2),
+        multiply(rotate(angle), multiply(scaleM(fit), translate(-half, -half))),
+      );
+      for (let i = 0; i < renderer.drawCount; i++) renderer.setTransform(i, m);
     };
 
     const bgra = renderer.format === "bgra8unorm";

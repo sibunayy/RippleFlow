@@ -1,5 +1,6 @@
 import { MeshRenderer } from "../render/meshRenderer";
-import { buildLogo } from "./logo";
+import { scale } from "../core/affine";
+import { buildLogo, LOGO_SIZE } from "./logo";
 
 declare global {
   interface Window {
@@ -15,7 +16,8 @@ async function main() {
   try {
     const renderer = await MeshRenderer.create(canvas);
     const t0 = performance.now();
-    const draws = buildLogo(canvas.width / 512);
+    const fit = canvas.width / LOGO_SIZE;
+    const draws = buildLogo(fit).map((d) => ({ ...d, transform: scale(fit) }));
     const ms = performance.now() - t0;
     renderer.setScene(draws);
     // Render every frame: a WebGPU canvas is only composited after the browser presents it.

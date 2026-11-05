@@ -1,19 +1,27 @@
+import { IDENTITY, type Affine } from "../core/affine";
 import type { Mesh } from "../geometry/mesh";
 
 export interface Draw {
+  /** Vertices in the draw's local coordinates. */
   mesh: Mesh;
   /** Straight (non-premultiplied) RGBA, 0..1. */
   color: readonly [number, number, number, number];
+  /** Local to output-pixel transform. Defaults to identity. Change later with setTransform. */
+  transform?: Affine;
+  /** Multiplies the color's alpha. Defaults to 1. */
+  opacity?: number;
 }
 
 const SHADER = /* wgsl */ `
-struct U { size: vec2f, pad: vec2f, color: vec4f }
+// m0 = (a, b, c, d), m1 = (e, f, _, _): x' = a*x + c*y + e, y' = b*x + d*y + f
+struct U { size: vec2f, pad: vec2f, color: vec4f, m0: vec4f, m1: vec4f }
 @group(0) @binding(0) var<uniform> u: U;
 
 @vertex
 fn vs(@location(0) p: vec2f) -> @builtin(position) vec4f {
-  // Pixel coordinates, origin top-left, y down.
-  return vec4f(p.x / u.size.x * 2.0 - 1.0, 1.0 - p.y / u.size.y * 2.0, 0.0, 1.0);
+  let w = vec2f(u.m0.x * p.x + u.m0.z * p.y + u.m1.x, u.m0.y * p.x + u.m0.w * p.y + u.m1.y);
+  // Output pixel coordinates, origin top-left, y down.
+  return vec4f(w.x / u.size.x * 2.0 - 1.0, 1.0 - w.y / u.size.y * 2.0, 0.0, 1.0);
 }
 
 @fragment
@@ -36,6 +44,8 @@ interface Prepared {
   bind: GPUBindGroup;
   count: number;
   color: Draw["color"];
+  transform: Affine;
+  opacity: number;
 }
 
 export class MeshRenderer {
@@ -113,12 +123,21 @@ export class MeshRenderer {
           usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
         });
         device.queue.writeBuffer(ibuf, 0, d.mesh.indices as Uint32Array<ArrayBuffer>);
-        const ubuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        const ubuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         const bind = device.createBindGroup({
           layout: this.pipeline.getBindGroupLayout(0),
           entries: [{ binding: 0, resource: { buffer: ubuf } }],
         });
-        return { vbuf, ibuf, ubuf, bind, count: d.mesh.indices.length, color: d.color };
+        return {
+          vbuf,
+          ibuf,
+          ubuf,
+          bind,
+          count: d.mesh.indices.length,
+          color: d.color,
+          transform: d.transform ?? IDENTITY,
+          opacity: d.opacity ?? 1,
+        };
       });
   }
 
@@ -126,11 +145,20 @@ export class MeshRenderer {
     return this.gpu.format;
   }
 
-  /** Overwrite vertex positions of draw `index` in place (same vertex count). */
-  updatePositions(index: number, positions: Float32Array): void {
+  /**
+   * Move, rotate, scale or fade draw `index` without touching its geometry. This
+   * is a uniform update only, so it is the cheap per-frame animation path.
+   * `index` counts the draws passed to setScene, skipping any with no triangles.
+   */
+  setTransform(index: number, transform: Affine, opacity = 1): void {
     const p = this.prepared[index];
     if (!p) throw new Error(`No draw at index ${index}`);
-    this.gpu.device.queue.writeBuffer(p.vbuf, 0, positions as Float32Array<ArrayBuffer>);
+    p.transform = transform;
+    p.opacity = opacity;
+  }
+
+  get drawCount(): number {
+    return this.prepared.length;
   }
 
   /** Create a reusable readback target for the current canvas size. */
@@ -168,7 +196,9 @@ export class MeshRenderer {
     });
     pass.setPipeline(this.pipeline);
     for (const p of this.prepared) {
-      device.queue.writeBuffer(p.ubuf, 0, new Float32Array([w, h, 0, 0, ...p.color]));
+      const [a, b, c, d, e, f] = p.transform;
+      const [r, g, bl, al] = p.color;
+      device.queue.writeBuffer(p.ubuf, 0, new Float32Array([w, h, 0, 0, r, g, bl, al * p.opacity, a, b, c, d, e, f, 0, 0]));
       pass.setBindGroup(0, p.bind);
       pass.setVertexBuffer(0, p.vbuf);
       pass.setIndexBuffer(p.ibuf, "uint32");
