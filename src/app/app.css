@@ -35,8 +35,13 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .empty { padding: 12px; opacity: 0.6; margin: 0; }
 .props { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 6px 12px; background: #24242b; }
 .props-name { min-width: 80px; }
-.props label { display: flex; flex-direction: column; font-size: 11px; opacity: 0.9; gap: 2px; }
-.props input { width: 84px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
+.scrub { position: relative; display: flex; flex-direction: column; font-size: 11px; gap: 2px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: ew-resize; }
+.scrub-label { opacity: 0.9; }
+.scrub-grip { position: absolute; right: 8px; bottom: 11px; opacity: 0.45; font-size: 14px; pointer-events: none; }
+.scrub input { pointer-events: none; }
+.scrub.editing { cursor: text; }
+.scrub.editing input { pointer-events: auto; outline: 2px solid #6a8cff; }
+.props .scrub input { width: 84px; min-height: 40px; padding: 0 8px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 16px; user-select: text; -webkit-user-select: text; }
 .bar-range { position: absolute; top: 8px; bottom: 8px; background: #3b4a66; border-radius: 6px; }
 .trim { position: absolute; top: -4px; bottom: -4px; width: 22px; touch-action: none; }
 .trim::after { content: ""; position: absolute; top: 4px; bottom: 4px; width: 6px; background: #8fb4ff; border-radius: 3px; }
@@ -71,5 +76,4 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .sheet .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
 .sheet .warn { color: #ff9a8a; }
 .sheet .preview { width: 100%; border-radius: 8px; background: #000; }
-.props .slider { width: 120px; min-height: 28px; padding: 0; }
 .sheet .compat { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; opacity: 0.8; margin: 8px 0; line-height: 1.35; }

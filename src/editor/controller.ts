@@ -200,6 +200,15 @@ export class EditorController {
     if (out.drag || out.select !== undefined) this.emit();
   }
 
+  /**
+   * Show the result of `cmd` without committing it (a number field being scrubbed).
+   * Pass null to drop it. Commit with `execute`, which records one undo step.
+   */
+  setPreview(cmd: Command | null): void {
+    this.preview = cmd ? cmd.apply(this.history.current) : null;
+    this.emit();
+  }
+
   private dropPreview(): void {
     this.preview = null;
   }
