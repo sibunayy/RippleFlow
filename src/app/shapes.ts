@@ -204,7 +204,7 @@ export function newSvgLayers(firstN: number, name: string, svg: SvgImport, compW
       name: sh.name,
       kind: "shape",
       parent: group.id,
-      shape: { path: nodesToPath(local), ...(sh.fill ? { fill: sh.fill } : {}), ...(sh.stroke ? { stroke: sh.stroke } : {}) },
+      shape: { path: nodesToPath(local), ...(sh.fill ? { fill: sh.fill } : {}), ...(sh.gradient ? { gradient: sh.gradient } : {}), ...(sh.stroke ? { stroke: sh.stroke } : {}) },
       transform: {
         anchorX: still(b.w / 2),
         anchorY: still(b.h / 2),

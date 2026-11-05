@@ -1,6 +1,6 @@
 import { IDENTITY, multiply, rotate, scale, translate, type Affine } from "../core/affine";
-import type { Rgba } from "../core/types";
-import { nodesToPath, parseNodes, transformPath } from "./nodes";
+import type { Gradient, GradientStop, Rgba } from "../core/types";
+import { nodesToPath, parseNodes, pathBounds, transformPath } from "./nodes";
 
 /** One drawable element from an SVG file, in the SVG's own user units. */
 export interface SvgShape {
@@ -8,6 +8,8 @@ export interface SvgShape {
   /** Plain M/L/C/Z path data with all transforms baked in. */
   readonly path: string;
   readonly fill?: Rgba;
+  /** Approximated from the SVG gradient (mapped onto the shape box). */
+  readonly gradient?: Gradient;
   readonly stroke?: { color: Rgba; width: number; join: "miter" | "round" | "bevel"; cap: "butt" | "round" | "square" };
 }
 
@@ -131,7 +133,96 @@ function rectPath(x: number, y: number, w: number, h: number, rx: number, ry: nu
   return `M${x + rx} ${y} H${x + w - rx} A${rx} ${ry} 0 0 1 ${x + w} ${y + ry} V${y + h - ry} A${rx} ${ry} 0 0 1 ${x + w - rx} ${y + h} H${x + rx} A${rx} ${ry} 0 0 1 ${x} ${y + h - ry} V${y + ry} A${rx} ${ry} 0 0 1 ${x + rx} ${y} Z`;
 }
 
+interface GradDef {
+  kind: "linear" | "radial";
+  attrs: Record<string, string>;
+  stops: GradientStop[];
+}
+
+/** Collect <linearGradient>/<radialGradient> definitions (with href inheritance of stops/attrs). */
+function collectGradients(els: El[], rules: Map<string, Record<string, string>>): Map<string, GradDef> {
+  const defs = new Map<string, GradDef>();
+  let cur: GradDef | null = null;
+  for (const e of els) {
+    if (e.tag === "lineargradient" || e.tag === "radialgradient") {
+      if (!e.open) { cur = null; continue; }
+      cur = { kind: e.tag === "lineargradient" ? "linear" : "radial", attrs: e.attrs, stops: [] };
+      if (e.attrs["id"]) defs.set(e.attrs["id"], cur);
+      if (e.selfClose) cur = null;
+    } else if (e.tag === "stop" && e.open && cur) {
+      const cls = (e.attrs["class"] ?? "").split(/\s+/).filter(Boolean);
+      const props: Record<string, string> = { ...e.attrs };
+      for (const c of cls) Object.assign(props, rules.get(`.${c}`));
+      Object.assign(props, declarations(e.attrs["style"] ?? ""));
+      const c = parseColor(props["stop-color"] ?? "#000");
+      const col: Rgba = c && c !== "none" ? c : [0, 0, 0, 1];
+      const off = props["offset"] ?? "0";
+      const o = off.endsWith("%") ? parseFloat(off) / 100 : parseFloat(off);
+      const op = num(props["stop-opacity"], 1);
+      cur.stops.push({ offset: Math.min(1, Math.max(0, Number.isFinite(o) ? o : 0)), color: [col[0], col[1], col[2], col[3] * Math.min(1, Math.max(0, op))] });
+    }
+  }
+  // href inheritance: take stops / missing attributes from the referenced gradient.
+  for (const g of defs.values()) {
+    const ref = (g.attrs["href"] ?? g.attrs["xlink:href"] ?? "").replace(/^#/, "");
+    let base = ref ? defs.get(ref) : undefined;
+    for (let depth = 0; base && depth < 8; depth++, base = defs.get((base.attrs["href"] ?? base.attrs["xlink:href"] ?? "").replace(/^#/, ""))) {
+      if (g.stops.length === 0) g.stops = base.stops;
+      g.attrs = { ...base.attrs, ...g.attrs };
+    }
+  }
+  return defs;
+}
+
+const frac = (v: string | undefined, d: number): number => {
+  if (v === undefined) return d;
+  const n = parseFloat(v);
+  if (!Number.isFinite(n)) return d;
+  return v.trim().endsWith("%") ? n / 100 : n;
+};
+
+/**
+ * Convert an SVG gradient into the app's box-relative gradient. `m` maps the gradient's user space to
+ * the shape's final space, `box` is the shape's box in that final space. Approximate by design: the app
+ * has only a bbox-spanning linear and a centred radial gradient.
+ */
+function convertGradient(g: GradDef, m: Affine, box: { x: number; y: number; w: number; h: number }): Gradient | null {
+  if (g.stops.length === 0) return null;
+  if (g.stops.length === 1) return { kind: "linear", angle: 0, stops: [{ offset: 0, color: g.stops[0]!.color }, { offset: 1, color: g.stops[0]!.color }] };
+  const units: "user" | "box" = g.attrs["gradientUnits"] === "userSpaceOnUse" ? "user" : "box";
+  const gt = parseTransform(g.attrs["gradientTransform"]);
+  // Gradient space -> final space. Box units map 0..1 onto the shape's box (already in final space).
+  const full: Affine = units === "box" ? multiply(multiply(translate(box.x, box.y), scale(box.w, box.h)), gt) : multiply(m, gt);
+  const stops = g.stops.map((x) => ({ ...x }));
+  if (g.kind === "linear") {
+    const x1 = frac(g.attrs["x1"], 0), y1 = frac(g.attrs["y1"], 0);
+    const x2 = frac(g.attrs["x2"], 1), y2 = frac(g.attrs["y2"], 0);
+    const [ax, ay] = [full[0] * x1 + full[2] * y1 + full[4], full[1] * x1 + full[3] * y1 + full[5]];
+    const [bx, by] = [full[0] * x2 + full[2] * y2 + full[4], full[1] * x2 + full[3] * y2 + full[5]];
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-9) return { kind: "linear", angle: 0, stops: [{ offset: 0, color: stops.at(-1)!.color }, { offset: 1, color: stops.at(-1)!.color }] };
+    const ux = dx / len, uy = dy / len;
+    const corners = [[box.x, box.y], [box.x + box.w, box.y], [box.x, box.y + box.h], [box.x + box.w, box.y + box.h]] as const;
+    const proj = corners.map(([cx, cy]) => cx * ux + cy * uy);
+    const pmin = Math.min(...proj), pmax = Math.max(...proj);
+    const base = ax * ux + ay * uy;
+    const span = Math.max(1e-9, pmax - pmin);
+    const mapped = stops.map((st) => ({ offset: Math.min(1, Math.max(0, (base + st.offset * len - pmin) / span)), color: st.color }));
+    return { kind: "linear", angle: (Math.atan2(uy, ux) * 180) / Math.PI, stops: mapped.slice(0, 8) };
+  }
+  // radial: scale offsets by radius relative to the box half-diagonal; centre assumed at the box centre.
+  const r = frac(g.attrs["r"], 0.5);
+  const rr = units === "box" ? r * Math.max(box.w, box.h) : r * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
+  const half = Math.max(1e-9, Math.hypot(box.w, box.h) / 2);
+  const k = rr / half;
+  const mapped = stops.map((st) => ({ offset: Math.min(1, st.offset * k), color: st.color }));
+  if (k < 1) mapped.push({ offset: 1, color: stops.at(-1)!.color });
+  return { kind: "radial", angle: 0, stops: mapped.slice(0, 8) };
+}
+
 interface Style {
+  fillRef: string | null;
   fill: Rgba | "none" | null; // null = unspecified-so-far -> black default applied at the end
   stroke: Rgba | "none";
   strokeWidth: number;
@@ -142,7 +233,7 @@ interface Style {
   strokeOpacity: number;
 }
 
-const BASE: Style = { fill: [0, 0, 0, 1], stroke: "none", strokeWidth: 1, join: "miter", cap: "butt", opacity: 1, fillOpacity: 1, strokeOpacity: 1 };
+const BASE: Style = { fillRef: null, fill: [0, 0, 0, 1], stroke: "none", strokeWidth: 1, join: "miter", cap: "butt", opacity: 1, fillOpacity: 1, strokeOpacity: 1 };
 
 /** Parse SVG text into shapes. Pure: no DOM (works under Node). Throws when there is no <svg>. */
 export function importSvg(src: string): SvgImport {
@@ -152,6 +243,7 @@ export function importSvg(src: string): SvgImport {
   if (!root) throw new Error("Not an SVG file");
 
   const skipped = new Set<string>();
+  const gradients = collectGradients(els, rules);
   const vb = (root.attrs["viewBox"] ?? "").split(/[\s,]+/).map(Number);
   const hasVb = vb.length === 4 && vb.every(Number.isFinite) && vb[2]! > 0 && vb[3]! > 0;
   const width = hasVb ? vb[2]! : num(root.attrs["width"], 100);
@@ -172,7 +264,7 @@ export function importSvg(src: string): SvgImport {
     }
     const top = stack[stack.length - 1]!;
     if (["defs", "clippath", "mask", "symbol", "lineargradient", "radialgradient", "pattern", "filter"].includes(e.tag)) {
-      if (e.tag !== "defs") skipped.add(e.tag);
+      if (!["defs", "lineargradient", "radialgradient"].includes(e.tag)) skipped.add(e.tag);
       if (!e.selfClose) defsDepth++;
       continue;
     }
@@ -193,8 +285,14 @@ export function importSvg(src: string): SvgImport {
     const paint = (key: string, cur: Rgba | "none" | null): Rgba | "none" | null => {
       const v = merged[key];
       if (v === undefined || v === "inherit") return cur;
-      if (v.startsWith("url(")) { skipped.add("gradient/pattern fill"); return cur === "none" ? "none" : [0.5, 0.5, 0.5, 1]; }
+      if (v.startsWith("url(")) {
+        const id = /url\(\s*['"]?#([^'")\s]+)/.exec(v)?.[1];
+        if (key === "fill" && id && gradients.has(id)) { s.fillRef = id; return gradients.get(id)!.stops[0]?.color ?? [0.5, 0.5, 0.5, 1]; }
+        skipped.add("pattern/gradient stroke");
+        return [0.5, 0.5, 0.5, 1];
+      }
       if (v === "currentColor") return cur;
+      if (key === "fill") s.fillRef = null;
       return parseColor(v) ?? cur;
     };
     s.fill = paint("fill", s.fill);
@@ -255,7 +353,11 @@ export function importSvg(src: string): SvgImport {
     }
     if (nodes.length === 0) continue;
     // Open subpaths have no fill area; a fill on a line is meaningless but harmless, so keep SVG semantics.
-    const path = nodesToPath(nodes.map((p) => transformPath(p, m)));
+    const baked = nodes.map((p) => transformPath(p, m));
+    const path = nodesToPath(baked);
+    const box = pathBounds(baked);
+    const gdef = s.fillRef ? gradients.get(s.fillRef) : undefined;
+    const gradient = gdef && box && box.w > 0 && box.h > 0 ? convertGradient(gdef, m, box) ?? undefined : undefined;
     const det = Math.abs(m[0] * m[3] - m[1] * m[2]);
     const fill = s.fill && s.fill !== "none" && e.tag !== "line" ? ([s.fill[0], s.fill[1], s.fill[2], s.fill[3] * s.fillOpacity * s.opacity] as Rgba) : undefined;
     const st = s.stroke !== "none" && s.strokeWidth > 0 ? ([s.stroke[0], s.stroke[1], s.stroke[2], s.stroke[3] * s.strokeOpacity * s.opacity] as Rgba) : undefined;
@@ -265,6 +367,7 @@ export function importSvg(src: string): SvgImport {
       name: merged["id"] ?? `${e.tag[0]!.toUpperCase()}${e.tag.slice(1)} ${count}`,
       path,
       ...(fill ? { fill } : {}),
+      ...(gradient && fill ? { gradient: { ...gradient, stops: gradient.stops.map((x) => ({ ...x, color: [x.color[0], x.color[1], x.color[2], x.color[3] * s.fillOpacity * s.opacity] as Rgba })) } } : {}),
       ...(st ? { stroke: { color: st, width: s.strokeWidth * Math.sqrt(det), join: s.join, cap: s.cap } } : {}),
     });
   }
