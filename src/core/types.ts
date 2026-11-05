@@ -151,6 +151,39 @@ export interface VideoContent {
   readonly start: number;
 }
 
+export type TextUnit = "char" | "word" | "line";
+
+/** Each unit (character, word or line) starts in the "from" state and settles to rest, staggered in time. */
+export interface TextAnimator {
+  readonly unit: TextUnit;
+  /** Seconds before the first unit starts. */
+  readonly start: number;
+  /** Seconds between one unit's start and the next. Negative runs the units back to front. */
+  readonly stagger: number;
+  /** Seconds each unit takes to settle. */
+  readonly duration: number;
+  readonly ease: Bezier;
+  readonly from: {
+    readonly opacity: number;
+    readonly dx: number;
+    readonly dy: number;
+    /** Multiplier, 1 = unchanged. */
+    readonly scale: number;
+    /** Degrees. */
+    readonly rotation: number;
+  };
+}
+
+/** A text layer's words. Its outlines are stored in `shape.path`, kept in step by the editor. */
+export interface TextContent {
+  readonly text: string;
+  readonly size: number;
+  /** Extra space between characters, in text units. */
+  readonly tracking: number;
+  readonly align: "left" | "center" | "right";
+  readonly animator?: TextAnimator;
+}
+
 export interface Layer {
   readonly id: Id;
   readonly name: string;
@@ -167,6 +200,8 @@ export interface Layer {
   readonly transform: Transform;
   /** Present on shape layers. */
   readonly shape?: ShapeContent;
+  /** Present on text layers (which are shape layers whose outline comes from the text). */
+  readonly text?: TextContent;
   /** Present on image layers. */
   readonly image?: ImageContent;
   /** Present on video layers. */

@@ -158,6 +158,18 @@ export function setInOut(id: Id, inPoint: number, outPoint: number): Command {
   };
 }
 
+/** Replace a layer with `edit(layer)` (return the same object for no change). */
+export function editLayer(id: Id, label: string, edit: (layer: Layer) => Layer): Command {
+  return {
+    label,
+    apply(comp) {
+      const layer = find(comp, id);
+      const next = edit(layer);
+      return next === layer ? comp : replaceLayer(comp, next);
+    },
+  };
+}
+
 /** Change a shape layer's fill, gradient or stroke. `edit` returns the new content (or the same object for no change). */
 export function editShape(id: Id, label: string, edit: (shape: ShapeContent) => ShapeContent): Command {
   return {

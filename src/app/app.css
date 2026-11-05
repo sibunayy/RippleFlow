@@ -138,3 +138,4 @@ body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; 
 .fx-params .scrub-label { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-sel { display: flex; flex-direction: column; gap: 2px; }
 .field-sel select { min-height: 40px; border: 0; border-radius: 8px; background: #34343e; color: inherit; font-size: 15px; padding: 0 8px; }
+.text-input { width: 100%; box-sizing: border-box; min-height: 64px; background: #1b1b21; color: inherit; border: 1px solid #44444f; border-radius: 8px; padding: 8px; font: inherit; resize: vertical; }

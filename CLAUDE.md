@@ -74,6 +74,8 @@ Effects: `Layer.effects` stack (blur, drop shadow, glow, noise, levels, brightne
 
 Masks and mattes: `Layer.masks` (add/subtract/intersect, feather, opacity, invert; static layer-local paths, point-editable) and `Layer.matte` (alpha/luma, normal/inverted) plus `Layer.hidden`. They use the same group path as effects: masks, then effects, then matte, then composite (`GroupInfo.masks/matte`, draws tagged `role`). `evaluateScene` embeds the matte source's own SceneItem. Style panel > Compositing (`src/app/Compositing.tsx`). Pixel tests: `scripts/run-matte.mjs`, UI: `run-matte-ui.mjs`.
 
+Text: toolbar Text adds a text layer (a shape layer plus `Layer.text`; `shape.path` holds the glyph outlines, rebuilt by `src/text/textEdit.ts` whenever text/size/tracking/align/animator change). Font: bundled Inter Bold (OFL, `src/text/fonts/`) parsed with opentype.js (`src/text/glyphs.ts`, loaded before the app renders). Animator (Style > Text): per character/word/line stagger of opacity/offset/scale/rotation with start, stagger, duration, ease (`src/core/text.ts`, `SceneItem.units`, geometry parts tagged `unit`/`pivot`, applied in `layerDraws`). Not built: per-property animator tracks, range selectors, more fonts, text on a path, editing text on canvas. Scripts `run-text.mjs`; export of animated text checked via ffmpeg.
+
 Null layers and parenting: toolbar Null adds an empty transform layer; Props "Parent" picker parents any layer to another (cycles not offered; transform only, opacity is not inherited). Script `scripts/run-parent.mjs`. No group/pre-comp yet.
 
 Not built: SVG import, text, audio (video clips export silent), composition size/fps UI, slipping/moving a clip on the timeline.

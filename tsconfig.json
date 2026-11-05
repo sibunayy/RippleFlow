@@ -9,7 +9,7 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
-    "types": ["vite/client", "@webgpu/types"],
+    "types": ["vite/client", "@webgpu/types", "node"],
     "isolatedModules": true
   },
   "include": ["src"]

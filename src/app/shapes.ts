@@ -1,9 +1,10 @@
 import { addLayer } from "../core/commands";
 import type { Command } from "../core/history";
 import { displaySize } from "../geometry/layerGeometry";
-import { nodesToPath, pathBounds, transformPath, type NodePath } from "../geometry/nodes";
+import { nodesToPath, parseNodes, pathBounds, transformPath, type NodePath } from "../geometry/nodes";
+import { layoutText } from "../text/glyphs";
 import { translate } from "../core/affine";
-import type { ImageContent, Layer, Rgba, Track, VideoContent } from "../core/types";
+import type { ImageContent, Layer, Rgba, TextContent, Track, VideoContent } from "../core/types";
 
 const empty: Track = { keys: [] };
 const still = (v: number): Track => ({ keys: [{ id: `s${v}`, t: 0, value: v }] });
@@ -140,5 +141,30 @@ export function newNullLayer(n: number, compW: number, compH: number): Layer {
     name: `Null ${n}`,
     kind: "shape",
     transform: { anchorX: empty, anchorY: empty, x: still(compW / 2), y: still(compH / 2), scaleX: empty, scaleY: empty, rotation: empty, opacity: empty },
+  };
+}
+
+/** A white text layer centred on the composition. Its outlines come from the loaded font. */
+export function newTextLayer(n: number, text: string, compW: number, compH: number): Layer | null {
+  const content: TextContent = { text, size: 160, tracking: 0, align: "center" };
+  const { path } = layoutText(content);
+  const b = pathBounds(parseNodes(path));
+  if (!b) return null;
+  return {
+    id: `layer-${n}`,
+    name: `Text ${n}`,
+    kind: "shape",
+    text: content,
+    shape: { path, fill: [1, 1, 1, 1] },
+    transform: {
+      anchorX: still(b.x + b.w / 2),
+      anchorY: still(b.y + b.h / 2),
+      x: still(compW / 2),
+      y: still(compH / 2),
+      scaleX: empty,
+      scaleY: empty,
+      rotation: empty,
+      opacity: empty,
+    },
   };
 }
