@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#181c28" />
+    <link rel="manifest" href="input.webmanifest" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <title>RippleFlow spike: input</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #181c28; color: #e8ecf5; font-family: system-ui, sans-serif;
+        overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+      canvas { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; background: #222838; }
+      #hud { position: fixed; left: env(safe-area-inset-left, 0); top: env(safe-area-inset-top, 0); margin: 10px; padding: 8px 10px;
+        background: #000a; border-radius: 10px; font: 12px/1.4 ui-monospace, Menlo, monospace; pointer-events: none; white-space: pre; }
+      #bar { position: fixed; right: env(safe-area-inset-right, 0); top: env(safe-area-inset-top, 0); margin: 10px; display: flex; gap: 8px; }
+      button { font-size: 16px; padding: 12px 16px; border: 0; border-radius: 10px; background: #2a5bd7; color: #fff; touch-action: manipulation; }
+      #sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 60%; overflow: auto; background: #000d; padding: 12px 16px 24px; display: none;
+        -webkit-user-select: text; user-select: text; font: 12px/1.35 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="hud">Draw with the Pencil. Two fingers pan, zoom and rotate.</div>
+    <div id="bar"><button id="clear">Clear</button><button id="reset">Reset view</button><button id="results">Results</button></div>
+    <div id="sheet"></div>
+    <script type="module" src="/src/spike/input.ts"></script>
+  </body>
+</html>
