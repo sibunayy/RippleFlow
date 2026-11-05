@@ -1,6 +1,6 @@
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { setParent } from "../core/commands";
-import { applyPreset, PRESETS } from "../core/presets";
+import { applyPreset, applyPresetToChildren, PRESETS } from "../core/presets";
 import type { Layer } from "../core/types";
 import type { EditorController } from "../editor/controller";
 import { propValue, setPropValue, type EditableProp } from "../editor/transformEdit";
@@ -29,6 +29,7 @@ const FIELDS: Field[] = [
 
 /** Numeric transform fields for the selected layer, evaluated at the playhead. Drag a number to scrub it, tap to type. */
 export function Props(props: { ctrl: EditorController; tick: () => number }) {
+  const [stagger, setStagger] = createSignal(0.1);
   const layer = () => (props.tick(), props.ctrl.document.layers.find((l) => l.id === props.ctrl.selection));
   return (
     <Show when={layer()}>
@@ -68,6 +69,22 @@ export function Props(props: { ctrl: EditorController; tick: () => number }) {
               )}
             </For>
           </div>
+          <Show when={props.ctrl.document.layers.some((o) => o.parent === l().id)}>
+            <div class="anim-presets" role="group" aria-label="Animate children">
+              <strong class="props-name">Children</strong>
+              <ScrubField label="Stagger s" value={stagger} perPx={0.01} min={0} max={2} onPreview={setStagger} onCommit={setStagger} />
+              <For each={PRESETS}>
+                {(p) => (
+                  <button
+                    classList={{ out: p.kind === "out" }}
+                    title={`${p.label} on each child, one after another`}
+                    onClick={() => props.ctrl.execute(applyPresetToChildren(l().id, p.id, props.ctrl.document.duration, stagger()))}>
+                    {p.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
           <For each={FIELDS}>
             {(f) => {
               const cmd = (v: number) => setPropValue(l().id, f.prop, v / f.mul, props.ctrl.time, props.ctrl.autoKey);

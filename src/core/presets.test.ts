@@ -65,3 +65,34 @@ describe("presets", () => {
     for (const p of PRESETS) expect(() => run(p.id)).not.toThrow();
   });
 });
+
+describe("staggered children", () => {
+  it("delays each child's start by index and keeps their ranges", async () => {
+    const { applyPresetToChildren } = await import("./presets");
+    const base = comp();
+    const mk = (id: string) => ({ ...L(base), id, parent: "g" });
+    const c: Composition = { ...base, layers: [{ ...L(base), id: "g", name: "g" }, mk("k1"), mk("k2"), mk("k3")] };
+    const out = applyPresetToChildren("g", "fade-in", 4, 0.25).apply(c);
+    const op = (id: string) => out.layers.find((l) => l.id === id)!.transform.opacity;
+    expect(evalTrack(op("k1"), 0, 1)).toBe(0);
+    expect(evalTrack(op("k1"), 0.5, 1)).toBe(1);
+    expect(evalTrack(op("k3"), 0.5, 1)).toBe(0); // third child starts at 0.5s
+    expect(evalTrack(op("k3"), 1.0, 1)).toBe(1);
+    expect(out.layers[0]!.transform.opacity.keys.length).toBe(0);
+    expect(out.layers[3]!.inPoint).toBeUndefined();
+  });
+  it("out presets finish earlier for later children", async () => {
+    const { applyPresetToChildren } = await import("./presets");
+    const base = comp();
+    const mk = (id: string) => ({ ...L(base), id, parent: "g" });
+    const c: Composition = { ...base, layers: [{ ...L(base), id: "g" }, mk("k1"), mk("k2")] };
+    const out = applyPresetToChildren("g", "fade-out", 4, 0.5).apply(c);
+    const op = (id: string) => out.layers.find((l) => l.id === id)!.transform.opacity;
+    expect(evalTrack(op("k1"), 4, 1)).toBe(0);
+    expect(evalTrack(op("k2"), 4, 1)).toBe(0);
+    expect(evalTrack(op("k2"), 3.4, 1)).toBeLessThan(1); // already fading
+    expect(evalTrack(op("k1"), 3.75, 1)).toBeLessThan(1);
+    expect(evalTrack(op("k1"), 3.4, 1)).toBe(1); // first child starts last
+    expect(evalTrack(op("k2"), 3.0, 1)).toBe(1);
+  });
+});

@@ -1,4 +1,4 @@
-import { editLayer } from "./commands";
+import { editLayer, sequence } from "./commands";
 import type { Command } from "./history";
 import { evalTrack } from "./evaluate";
 import type { Bezier, Id, Keyframe, Layer, Track, Transform } from "./types";
@@ -95,7 +95,7 @@ function writeSpan(track: Track, prop: Prop, stops: readonly Stop[], kind: "in" 
  * where the layer sits when settled, so they work on any position/size. Replaces the keys of the properties
  * it touches within the span; everything else is kept.
  */
-export function applyPreset(layerId: Id, presetId: string, compDuration: number): Command {
+export function applyPreset(layerId: Id, presetId: string, compDuration: number, delay = 0): Command {
   const preset = PRESETS.find((p) => p.id === presetId);
   if (!preset) throw new Error(`Unknown preset ${presetId}`);
   return editLayer(layerId, preset.label, (layer: Layer) => {
@@ -103,11 +103,24 @@ export function applyPreset(layerId: Id, presetId: string, compDuration: number)
     const b = layer.outPoint ?? compDuration;
     const dur = Math.min(preset.dur, Math.max(0, b - a));
     if (dur <= 0) return layer;
-    const [ta, tb] = preset.kind === "in" ? [a, a + dur] : [b - dur, b];
+    // `delay` pushes an "in" later and pulls an "out" earlier (for staggered groups), without changing the layer's range.
+    const d = Math.min(Math.max(0, delay), Math.max(0, b - a - dur));
+    const [ta, tb] = preset.kind === "in" ? [a + d, a + d + dur] : [b - d - dur, b - d];
     let transform = layer.transform;
     for (const [prop, stops] of Object.entries(preset.props) as [Prop, readonly Stop[]][]) {
       transform = { ...transform, [prop]: writeSpan(transform[prop], prop, stops, preset.kind, ta, tb, layerId) };
     }
     return { ...layer, transform };
   });
+}
+
+/** Apply a preset to every direct child of `parentId`, each starting `stagger` seconds after the one before (in stack order). */
+export function applyPresetToChildren(parentId: Id, presetId: string, compDuration: number, stagger: number): Command {
+  return {
+    label: "Animate children",
+    apply(comp) {
+      const kids = comp.layers.filter((l) => l.parent === parentId);
+      return sequence("Animate children", kids.map((k, i) => applyPreset(k.id, presetId, compDuration, i * Math.max(0, stagger)))).apply(comp);
+    },
+  };
 }
