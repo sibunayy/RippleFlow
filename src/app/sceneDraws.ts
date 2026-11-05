@@ -28,15 +28,25 @@ export function drawsFor(
     const g = geometryOf(item.id);
     if (!g) continue;
     const layerToDevice = multiply(toDevice, item.matrix);
+    const [ma, mb, mc, md] = item.matrix;
+    const sx = Math.hypot(ma, mb);
+    const sy = Math.hypot(mc, md);
     for (const part of g.parts) {
-      if (part.mesh.indices.length === 0) continue;
-      const transform = part.local ? multiply(layerToDevice, part.local) : layerToDevice;
+      let mesh = part.mesh;
+      let base = layerToDevice;
+      // Non-uniform layer scale would thin a stroke along one axis; rebuild it in scaled space instead.
+      if (part.strokeAt && sx > 1e-9 && sy > 1e-9 && Math.abs(sx - sy) > 1e-3 * Math.max(sx, sy)) {
+        mesh = part.strokeAt(sx, sy);
+        base = multiply(layerToDevice, [1 / sx, 0, 0, 1 / sy, 0, 0]);
+      }
+      if (mesh.indices.length === 0) continue;
+      const transform = part.local ? multiply(base, part.local) : base;
       if (part.video) {
         const m = mediaOf?.(item.id);
         if (!m || (!m.frame && !m.image)) continue;
-        out.push({ mesh: part.mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(m.frame ? { frame: m.frame } : { image: m.image! }) });
+        out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(m.frame ? { frame: m.frame } : { image: m.image! }) });
       } else {
-        out.push({ mesh: part.mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(part.image ? { image: part.image } : {}), ...(part.gradient ? { gradient: part.gradient } : {}) });
+        out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(part.image ? { image: part.image } : {}), ...(part.gradient ? { gradient: part.gradient } : {}) });
       }
     }
   }

@@ -17,6 +17,12 @@ export interface ShapePart {
   readonly video?: true;
   /** Mesh to layer-local transform (used to rotate sideways-coded video). Defaults to identity. */
   readonly local?: Affine;
+  /**
+   * Stroke parts only: the stroke mesh for a layer whose world scale is (sx, sy), built so the line is the
+   * same thickness in every direction (width times the geometric mean scale). Returns the mesh in
+   * scaled space; draw it with the layer matrix divided by (sx, sy).
+   */
+  readonly strokeAt?: (sx: number, sy: number) => Mesh;
   /** Paint this gradient over `bbox` instead of the flat color. */
   readonly gradient?: { readonly gradient: Gradient; readonly bbox: { x: number; y: number; w: number; h: number } };
 }
@@ -46,15 +52,23 @@ export function buildShapeGeometry(shape: ShapeContent, tolerance = 0.1): ShapeG
   }
   if (shape.stroke) {
     const s = shape.stroke;
+    const strokeOpts = { join: s.join ?? "miter", cap: s.cap ?? "butt", miterLimit: 4, tolerance } as const;
+    const cache = new Map<string, Mesh>();
     parts.push({
-      mesh: tessellateStroke(subpaths, {
-        width: s.width,
-        join: s.join ?? "miter",
-        cap: s.cap ?? "butt",
-        miterLimit: 4,
-        tolerance,
-      }),
+      mesh: tessellateStroke(subpaths, { width: s.width, ...strokeOpts }),
       color: s.color,
+      strokeAt: (sx, sy) => {
+        const key = `${sx.toFixed(3)},${sy.toFixed(3)}`;
+        let m = cache.get(key);
+        if (!m) {
+          const k = Math.sqrt(sx * sy);
+          const scaled = subpaths.map((sp) => ({ ...sp, points: sp.points.map((v, i) => v * (i % 2 ? sy : sx)) }));
+          m = tessellateStroke(scaled, { width: s.width * k, ...strokeOpts, tolerance: tolerance * Math.max(sx, sy) });
+          if (cache.size >= 8) cache.delete(cache.keys().next().value!);
+          cache.set(key, m);
+        }
+        return m;
+      },
     });
   }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

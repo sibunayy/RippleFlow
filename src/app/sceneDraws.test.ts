@@ -105,3 +105,32 @@ describe("video draws", () => {
     expect(s.sync(t, buildDraws(c, 1))).toBe("scene");
   });
 });
+
+describe("stroke under non-uniform scale", () => {
+  const thickness = (path: string, scaleX: number, scaleY: number, axis: 0 | 1) => {
+    const line: Layer = {
+      ...rect,
+      shape: { path, stroke: { color: [0, 0, 0, 1], width: 10 } },
+      transform: { ...rect.transform, scaleX: { keys: [{ id: "a", t: 0, value: scaleX }] }, scaleY: { keys: [{ id: "b", t: 0, value: scaleY }] } },
+    };
+    const c = new EditorController({ width: 1000, height: 500, fps: 30, duration: 5, layers: [] });
+    c.execute(addLayer(line));
+    const d = buildDraws(c, 1)[1]!;
+    const [a, b, cc, dd, e, f] = d.transform;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < d.mesh.positions.length; i += 2) {
+      const x = d.mesh.positions[i]!, y = d.mesh.positions[i + 1]!;
+      const v = axis === 0 ? a * x + cc * y + e : b * x + dd * y + f;
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    return hi - lo;
+  };
+  it("is as thick across a horizontal line as across a vertical one", () => {
+    const h = thickness("M0 0 H100", 4, 1, 1); // across a horizontal line = y extent
+    const v = thickness("M0 0 V100", 4, 1, 0); // across a vertical line = x extent
+    expect(h).toBeCloseTo(v, 3);
+    expect(h).toBeCloseTo(20, 3); // 10 * sqrt(4 * 1)
+  });
+  it("is unchanged for uniform scale", () => expect(thickness("M0 0 H100", 3, 3, 1)).toBeCloseTo(30, 3));
+});
