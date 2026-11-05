@@ -42,6 +42,8 @@ export class MeshRenderer {
   private pipeline: GPURenderPipeline;
   private msaa?: GPUTexture;
   private prepared: Prepared[] = [];
+  /** Background the frame is cleared to. Use alpha 1 for video export. */
+  clearColor: GPUColor = { r: 0, g: 0, b: 0, a: 0 };
 
   private constructor(
     private gpu: Gpu,
@@ -120,6 +122,24 @@ export class MeshRenderer {
       });
   }
 
+  get format(): GPUTextureFormat {
+    return this.gpu.format;
+  }
+
+  /** Overwrite vertex positions of draw `index` in place (same vertex count). */
+  updatePositions(index: number, positions: Float32Array): void {
+    const p = this.prepared[index];
+    if (!p) throw new Error(`No draw at index ${index}`);
+    this.gpu.device.queue.writeBuffer(p.vbuf, 0, positions as Float32Array<ArrayBuffer>);
+  }
+
+  /** Create a reusable readback target for the current canvas size. */
+  createReadback(): FrameReadback {
+    return new FrameReadback(this.gpu.device, this.gpu.format, this.canvas.width, this.canvas.height, (enc, tex, w, h) =>
+      this.encode(enc, tex, w, h),
+    );
+  }
+
   private ensureMsaa(w: number, h: number): GPUTexture {
     if (!this.msaa || this.msaa.width !== w || this.msaa.height !== h) {
       this.msaa?.destroy();
@@ -140,7 +160,7 @@ export class MeshRenderer {
         {
           view: this.ensureMsaa(w, h).createView(),
           resolveTarget: target.createView(),
-          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          clearValue: this.clearColor,
           loadOp: "clear",
           storeOp: "discard",
         },
@@ -201,5 +221,52 @@ export class MeshRenderer {
     buf.destroy();
     tex.destroy();
     return { width: w, height: h, data };
+  }
+}
+
+/**
+ * Reusable offscreen render + CPU readback. Avoids allocating a texture and
+ * buffer per frame. `read()` returns rows padded to `bytesPerRow`, in the
+ * canvas format (BGRA or RGBA), premultiplied alpha.
+ */
+export class FrameReadback {
+  readonly bytesPerRow: number;
+  private tex: GPUTexture;
+  private buf: GPUBuffer;
+
+  constructor(
+    private device: GPUDevice,
+    readonly format: GPUTextureFormat,
+    readonly width: number,
+    readonly height: number,
+    private encodeScene: (enc: GPUCommandEncoder, tex: GPUTexture, w: number, h: number) => void,
+  ) {
+    this.bytesPerRow = Math.ceil((width * 4) / 256) * 256;
+    this.tex = device.createTexture({
+      size: [width, height],
+      format,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
+    this.buf = device.createBuffer({
+      size: this.bytesPerRow * height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+  }
+
+  /** Render the scene and return a copy of the pixels (padded rows). */
+  async read(): Promise<Uint8Array<ArrayBuffer>> {
+    const enc = this.device.createCommandEncoder();
+    this.encodeScene(enc, this.tex, this.width, this.height);
+    enc.copyTextureToBuffer({ texture: this.tex }, { buffer: this.buf, bytesPerRow: this.bytesPerRow }, [this.width, this.height]);
+    this.device.queue.submit([enc.finish()]);
+    await this.buf.mapAsync(GPUMapMode.READ);
+    const out = new Uint8Array(this.buf.getMappedRange().slice(0));
+    this.buf.unmap();
+    return out;
+  }
+
+  destroy(): void {
+    this.tex.destroy();
+    this.buf.destroy();
   }
 }
