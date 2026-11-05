@@ -1,5 +1,5 @@
 import type { Command } from "./history";
-import type { BlendMode, Composition, Effect, Id, Keyframe, Layer, Mask, Matte, ShapeContent, Track, Transform } from "./types";
+import type { BlendMode, Composition, Effect, Id, Keyframe, Layer, Mask, Matte, Rgba, ShapeContent, Track, Transform } from "./types";
 
 const find = (comp: Composition, id: Id): Layer => {
   const layer = comp.layers.find((l) => l.id === id);
@@ -152,6 +152,31 @@ export function setDuration(seconds: number): Command {
     apply(comp) {
       if (!(seconds >= 0.1 && Number.isFinite(seconds))) throw new Error("Length must be at least 0.1 s");
       return seconds === comp.duration ? comp : { ...comp, duration: seconds };
+    },
+  };
+}
+
+/** Change the canvas size (whole pixels, 16..4096) and/or the frame rate. Layers keep their positions. */
+export function setCanvas(patch: { width?: number; height?: number; fps?: number }): Command {
+  return {
+    label: "Composition settings",
+    apply(comp) {
+      const width = Math.round(patch.width ?? comp.width);
+      const height = Math.round(patch.height ?? comp.height);
+      const fps = patch.fps ?? comp.fps;
+      if (!(width >= 16 && width <= 4096 && height >= 16 && height <= 4096)) throw new Error("Size must be between 16 and 4096 pixels");
+      if (!(fps >= 1 && fps <= 120)) throw new Error("Frame rate must be between 1 and 120");
+      return width === comp.width && height === comp.height && fps === comp.fps ? comp : { ...comp, width, height, fps };
+    },
+  };
+}
+
+export function setBackground(color: Rgba): Command {
+  return {
+    label: "Background colour",
+    apply(comp) {
+      const b = comp.background;
+      return b && b.every((v, i) => v === color[i]) ? comp : { ...comp, background: color };
     },
   };
 }

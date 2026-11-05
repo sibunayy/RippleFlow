@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLayer, duplicateLayer, renameLayer, moveLayer, removeKeyframe, removeLayer, setInOut, setKeyframe, setParent } from "./commands";
+import { addLayer, setBackground, setCanvas, duplicateLayer, renameLayer, moveLayer, removeKeyframe, removeLayer, setInOut, setKeyframe, setParent } from "./commands";
 import { History } from "./history";
 import type { Composition, Layer, Track, Transform } from "./types";
 
@@ -137,5 +137,21 @@ describe("duplicateLayer and renameLayer", () => {
     expect(() => duplicateLayer("a", "b").apply(c)).toThrow();
     expect(renameLayer("a", "  ").apply(c)).toBe(c);
     expect(renameLayer("a", " Hero ").apply(c).layers[0]!.name).toBe("Hero");
+  });
+});
+
+describe("composition settings", () => {
+  it("changes size and fps, keeps layers", () => {
+    const c = setCanvas({ width: 1080, height: 1920, fps: 60 }).apply({ ...empty, layers: [layer("a")] });
+    expect([c.width, c.height, c.fps, c.layers.length]).toEqual([1080, 1920, 60, 1]);
+  });
+  it("rounds sizes and rejects out-of-range values", () => {
+    expect(setCanvas({ width: 100.4 }).apply(empty).width).toBe(100);
+    expect(() => setCanvas({ width: 5000 }).apply(empty)).toThrow();
+    expect(() => setCanvas({ fps: 0 }).apply(empty)).toThrow();
+  });
+  it("is a no-op when nothing changes and sets the background", () => {
+    expect(setCanvas({ width: 1920 }).apply(empty)).toBe(empty);
+    expect(setBackground([0, 0, 0, 1]).apply(empty).background).toEqual([0, 0, 0, 1]);
   });
 });
