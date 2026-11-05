@@ -1,4 +1,5 @@
-import { BLEND_MODES, MAX_GRADIENT_STOPS, type BlendMode, type Gradient } from "../core/types";
+import { BLEND_MODES, MAX_GRADIENT_STOPS, type BlendMode, type Effect, type EffectType, type Gradient } from "../core/types";
+import { EFFECT_BY_TYPE } from "../core/effects";
 import type { Bezier, Composition, ImageContent, Keyframe, Layer, Rgba, ShapeContent, Track, Transform, VideoContent } from "../core/types";
 
 /** Bump when the stored shape changes, and add a step to `migrate`. */
@@ -59,6 +60,31 @@ function track(v: unknown, what: string): Track {
 }
 
 const TRACKS: (keyof Transform)[] = ["anchorX", "anchorY", "x", "y", "scaleX", "scaleY", "rotation", "opacity"];
+
+function effects(v: unknown, what: string): Effect[] {
+  if (!Array.isArray(v)) return fail(`${what} must be an array`);
+  const seen = new Set<string>();
+  return v.map((raw, i) => {
+    const w = `${what}[${i}]`;
+    if (!isObj(raw)) return fail(`${w} must be an object`);
+    const id = str(raw.id, `${w}.id`);
+    if (seen.has(id)) fail(`${w} duplicates effect id ${id}`);
+    seen.add(id);
+    const type = str(raw.type, `${w}.type`);
+    const spec = EFFECT_BY_TYPE[type as EffectType];
+    if (!spec) return fail(`${w}.type ${type} is not a known effect`);
+    if (!isObj(raw.values)) return fail(`${w}.values must be an object`);
+    const values: Record<string, Track> = {};
+    for (const p of spec.params) values[p.key] = track(raw.values[p.key] ?? { keys: [] }, `${w}.values.${p.key}`);
+    const out: { -readonly [K in keyof Effect]: Effect[K] } = { id, type: type as EffectType, values };
+    if (raw.enabled !== undefined) {
+      if (typeof raw.enabled !== "boolean") fail(`${w}.enabled must be true or false`);
+      out.enabled = raw.enabled as boolean;
+    }
+    if (raw.color !== undefined) out.color = rgba(raw.color, `${w}.color`);
+    return out;
+  });
+}
 
 function gradient(v: unknown, what: string): Gradient {
   if (!isObj(v)) return fail(`${what} must be an object`);
@@ -121,6 +147,7 @@ function layer(v: unknown, i: number): Layer {
   const transform = Object.fromEntries(TRACKS.map((p) => [p, track(tr[p] ?? { keys: [] }, `${what}.transform.${p}`)])) as unknown as Transform;
   const out: { -readonly [K in keyof Layer]: Layer[K] } = { id: str(v.id, `${what}.id`), name: str(v.name, `${what}.name`), kind, transform };
   if (v.blend !== undefined) out.blend = (BLEND_MODES as readonly unknown[]).includes(v.blend) ? (v.blend as BlendMode) : fail(`${what}.blend must be one of ${BLEND_MODES.join(", ")}`);
+  if (v.effects !== undefined) out.effects = effects(v.effects, `${what}.effects`);
   if (v.parent !== undefined) out.parent = str(v.parent, `${what}.parent`);
   if (v.shape !== undefined) out.shape = shape(v.shape, `${what}.shape`);
   if (v.image !== undefined) out.image = image(v.image, `${what}.image`);

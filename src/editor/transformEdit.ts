@@ -33,7 +33,7 @@ export function decompose(m: Affine, anchorX: number, anchorY: number, prevRotat
  * holding `before`: a lone keyframe would just hold its value for all time, so the
  * edit would change the property everywhere and nothing would animate.
  */
-function writeTrack(track: Track, t: number, value: number, autoKey: boolean, id: string, before: number): Track {
+export function writeTrack(track: Track, t: number, value: number, autoKey: boolean, id: string, before: number): Track {
   if (autoKey || track.keys.length > 1) {
     if (autoKey && track.keys.length === 0 && t > 1e-9) {
       return { keys: [{ id: id.replace(/@.*$/, "@0"), t: 0, value: before }, { id, t, value }] };

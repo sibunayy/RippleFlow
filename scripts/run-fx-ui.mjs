@@ -1,0 +1,38 @@
+// Usage: node scripts/run-fx-ui.mjs "<app url>?debug&noloop"
+import { createRequire } from "node:module";
+const { chromium } = createRequire(import.meta.url)("playwright");
+const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
+const errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+await page.goto(process.argv[2]);
+await page.waitForFunction(() => window.__rf);
+await page.waitForTimeout(600);
+const fx = () => page.evaluate(() => JSON.parse(JSON.stringify(window.__rf.ctrl.document.layers[0].effects ?? [])));
+await page.getByText("Rect", { exact: true }).click();
+await page.getByText("+ Add effect").click();
+await page.locator(".fx-menu").getByText("Invert", { exact: true }).click();
+await page.getByText("+ Add effect").click();
+await page.locator(".fx-menu").getByText("Blur", { exact: true }).click();
+console.log("effects:", (await fx()).map((e) => e.type));
+const r = page.getByLabel("Blur: Radius");
+await r.fill("40"); await r.press("Enter");
+console.log("blur radius:", (await fx())[1].values.radius.keys[0].value);
+await page.getByLabel("Move Blur up").click();
+console.log("after move up:", (await fx()).map((e) => e.type));
+await page.getByLabel("Invert on/off").click();
+console.log("invert enabled:", (await fx()).find((e) => e.type === "invert").enabled);
+// Scene sees only the enabled effect.
+console.log("scene effects:", await page.evaluate(() => window.__rf.ctrl.scene()[0].effects.map((e) => e.type)));
+await page.getByLabel("Remove Invert").click();
+console.log("after remove:", (await fx()).map((e) => e.type));
+await page.getByText("Undo", { exact: true }).click();
+console.log("after undo:", (await fx()).map((e) => e.type));
+await page.waitForFunction(() => document.querySelector(".save").textContent === "Saved");
+await page.reload(); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(600);
+console.log("after reload:", (await fx()).map((e) => e.type));
+const px = await page.evaluate(async () => { window.__rf.frame(); const r = await window.__rf.renderer.readPixels(); const c = window.__rf.ctrl; const x = Math.round(c.view[4] + c.view[0] * 960), y = Math.round(c.view[5] + c.view[3] * 540); const i = (y * r.width + x) * 4; return [...r.data.slice(i, i + 3)]; });
+console.log("centre pixel with blur+invert:", px);
+console.log("errors:", errors.length ? errors : "none");
+await browser.close();

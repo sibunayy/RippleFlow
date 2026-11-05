@@ -2,6 +2,8 @@ import { IDENTITY, type Affine } from "../core/affine";
 import type { Mesh } from "../geometry/mesh";
 import type { BlendMode, Gradient } from "../core/types";
 import { Nv12Readback } from "./nv12Readback";
+import { FxEngine } from "./fxEngine";
+import type { ResolvedFx } from "../core/effects";
 
 export interface Draw {
   /** Vertices in the draw's local coordinates. */
@@ -28,6 +30,21 @@ export interface Draw {
   gradient?: GradientPaint;
   /** How it combines with what is behind it. Defaults to "normal". */
   blend?: BlendMode;
+  /** Set on every draw of a layer that has effects. */
+  group?: GroupInfo;
+}
+
+/**
+ * Draws that belong to one layer with effects. Those draws are rendered together
+ * into their own texture (at full opacity, normal blend), the effects run over
+ * it, and the result is composited with this opacity and blend mode. The `id`
+ * says which draws belong together; the rest may change every frame.
+ */
+export interface GroupInfo {
+  readonly id: number;
+  readonly fx: readonly ResolvedFx[];
+  readonly opacity: number;
+  readonly blend: BlendMode;
 }
 
 export interface GradientPaint {
@@ -160,6 +177,7 @@ interface Prepared {
   extent: [number, number];
   textured: boolean;
   blend: BlendMode;
+  group?: GroupInfo;
   gradient?: GradientPaint;
   /** Current video frame; the draw is skipped until one is set. */
   external: boolean;
@@ -174,6 +192,7 @@ export class MeshRenderer {
   private layouts!: Record<Kind, GPUBindGroupLayout>;
   private pipelineLayouts!: Record<Kind, GPUPipelineLayout>;
   private pipelines = new Map<string, GPURenderPipeline>();
+  private fxEngine?: FxEngine;
   private sampler: GPUSampler;
   /** Uploaded images by bitmap identity, so editing other layers never re-uploads a photo. */
   private textures = new Map<ImageBitmap, GPUTexture>();
@@ -313,6 +332,7 @@ export class MeshRenderer {
           extent: [ex || 1, ey || 1] as [number, number],
           textured,
           blend: d.blend ?? "normal",
+          group: d.group,
           gradient,
           external,
           frame: d.frame,
@@ -330,6 +350,13 @@ export class MeshRenderer {
         this.textures.delete(bitmap);
       }
     }
+  }
+
+  /** Update the effect group of draw `index` (values change every frame; membership is fixed by setScene). */
+  setGroup(index: number, group: GroupInfo | undefined): void {
+    const p = this.prepared[index];
+    if (!p) throw new Error(`No draw at index ${index}`);
+    p.group = group;
   }
 
   /** Swap the video frame of draw `index` (a draw created with `frame`). Cheap: no geometry upload. */
@@ -368,6 +395,7 @@ export class MeshRenderer {
       p.ubuf.destroy();
     }
     this.prepared = [];
+    this.fxEngine?.destroy();
     for (const t of this.textures.values()) t.destroy();
     this.textures.clear();
     this.msaa?.destroy();
@@ -399,24 +427,68 @@ export class MeshRenderer {
   }
 
   private encode(enc: GPUCommandEncoder, target: GPUTexture, w: number, h: number): void {
-    const { device } = this.gpu;
-    const pass = enc.beginRenderPass({
+    // Runs of consecutive draws: plain ones go straight into the frame; a layer with effects is drawn
+    // into its own texture, run through its effects and composited back.
+    const runs: { group?: GroupInfo; list: Prepared[] }[] = [];
+    for (const p of this.prepared) {
+      const last = runs[runs.length - 1];
+      if (last && (last.group?.id ?? -1) === (p.group?.id ?? -1) && (p.group || !last.group)) last.list.push(p);
+      else runs.push({ ...(p.group ? { group: p.group } : {}), list: [p] });
+    }
+    if (!runs.some((r) => r.group)) {
+      const pass = this.msaaPass(enc, target, this.clearColor, w, h);
+      this.drawList(pass, this.prepared, w, h, false);
+      pass.end();
+      return;
+    }
+    const fx = (this.fxEngine ??= new FxEngine(this.gpu.device, this.gpu.format));
+    fx.begin(w, h);
+    let cur: GPUTexture | null = null;
+    runs.forEach((run, i) => {
+      const last = i === runs.length - 1;
+      if (!run.group) {
+        const out: GPUTexture = last ? target : fx.nextAccum(cur);
+        const pass = this.msaaPass(enc, out, cur ? { r: 0, g: 0, b: 0, a: 0 } : this.clearColor, w, h);
+        if (cur) fx.copyInto(pass, cur);
+        this.drawList(pass, run.list, w, h, false);
+        pass.end();
+        cur = out;
+        return;
+      }
+      const layer = fx.layerTarget;
+      const pass = this.msaaPass(enc, layer, { r: 0, g: 0, b: 0, a: 0 }, w, h);
+      this.drawList(pass, run.list, w, h, true);
+      pass.end();
+      const result = fx.applyEffects(enc, layer, run.group.fx);
+      const out: GPUTexture = last ? target : fx.nextAccum(cur);
+      fx.composite(enc, out, cur, result, run.group.opacity, run.group.blend, this.clearColor);
+      cur = out;
+    });
+  }
+
+  private msaaPass(enc: GPUCommandEncoder, resolveTo: GPUTexture, clear: GPUColor, w: number, h: number): GPURenderPassEncoder {
+    return enc.beginRenderPass({
       colorAttachments: [
         {
           view: this.ensureMsaa(w, h).createView(),
-          resolveTarget: target.createView(),
-          clearValue: this.clearColor,
+          resolveTarget: resolveTo.createView(),
+          clearValue: clear,
           loadOp: "clear",
           storeOp: "discard",
         },
       ],
     });
+  }
+
+  /** `flat`: draw at full opacity with normal blending (the layer's group applies those later). */
+  private drawList(pass: GPURenderPassEncoder, list: readonly Prepared[], w: number, h: number, flat: boolean): void {
+    const { device } = this.gpu;
     let current: GPURenderPipeline | null = null;
     const data = new Float32Array(UNIFORM_FLOATS);
-    for (const p of this.prepared) {
+    for (const p of list) {
       if (p.external && !p.frame) continue; // no decoded frame yet
       const kind: Kind = p.external ? "external" : p.textured ? "textured" : p.gradient ? "gradient" : "solid";
-      const want = this.pipelineFor(kind, p.blend);
+      const want = this.pipelineFor(kind, flat ? "normal" : p.blend);
       if (want !== current) {
         pass.setPipeline(want);
         current = want;
@@ -424,7 +496,7 @@ export class MeshRenderer {
       const [a, b, c, d, e, f] = p.transform;
       const [r, g, bl, al] = p.textured || p.external || p.gradient ? [1, 1, 1, 1] : p.color;
       data.fill(0);
-      data.set([w, h, p.extent[0], p.extent[1], r, g, bl, al * p.opacity, a, b, c, d, e, f, 0, 0]);
+      data.set([w, h, p.extent[0], p.extent[1], r, g, bl, al * (flat ? 1 : p.opacity), a, b, c, d, e, f, 0, 0]);
       if (p.gradient) {
         const { gradient: gr, bbox } = p.gradient;
         data.set([bbox.x, bbox.y, bbox.w, bbox.h, gr.kind === "radial" ? 1 : 0, (gr.angle * Math.PI) / 180, gr.stops.length, 0], 16);
@@ -451,7 +523,6 @@ export class MeshRenderer {
       pass.setIndexBuffer(p.ibuf, "uint32");
       pass.drawIndexed(p.count);
     }
-    pass.end();
   }
 
   /** Draw the scene to the canvas. */

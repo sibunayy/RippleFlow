@@ -18,6 +18,7 @@ import {
   setStrokeEnabled,
   type FillMode,
 } from "../editor/styleEdit";
+import { Effects } from "./Effects";
 import { ScrubField } from "./ScrubField";
 
 const FILL_MODES: { id: FillMode; label: string }[] = [
@@ -219,6 +220,7 @@ export function Style(props: { ctrl: EditorController; tick: () => number; notif
                   </>
                 )}
               </Show>
+              <Effects ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
             </div>
           </aside>
         );
