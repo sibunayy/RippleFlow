@@ -39,12 +39,30 @@ export interface Transform {
   readonly opacity: Track;
 }
 
+export type Rgba = readonly [number, number, number, number];
+
+/** Static vector content of a shape layer (animation is on the transform). */
+export interface ShapeContent {
+  /** SVG path data, in the layer's local coordinates. */
+  readonly path: string;
+  /** Straight RGBA 0..1. Omit for no fill. */
+  readonly fill?: Rgba;
+  readonly stroke?: {
+    readonly color: Rgba;
+    readonly width: number;
+    readonly join?: "miter" | "round" | "bevel";
+    readonly cap?: "butt" | "round" | "square";
+  };
+}
+
 export interface Layer {
   readonly id: Id;
   readonly name: string;
   readonly kind: "shape" | "image" | "video";
   readonly parent?: Id;
   readonly transform: Transform;
+  /** Present on shape layers. */
+  readonly shape?: ShapeContent;
   /** Seconds. The layer is visible for inPoint <= t < outPoint. Defaults: 0 and the composition duration. */
   readonly inPoint?: number;
   readonly outPoint?: number;
