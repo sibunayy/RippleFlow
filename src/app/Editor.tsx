@@ -4,6 +4,8 @@ import { EditorController, type PointerInput } from "../editor/controller";
 import { MeshRenderer } from "../render/meshRenderer";
 import { buildDraws, SceneSync, selectionCorners } from "./sceneDraws";
 import { addShape, type ShapeKind } from "./shapes";
+import type { KeyColumn } from "../editor/keyframeEdit";
+import { Graph } from "./Graph";
 import { Props } from "./Props";
 import { Timeline } from "./Timeline";
 
@@ -20,6 +22,7 @@ export function Editor() {
   const [tick, setTick] = createSignal(0);
   const [error, setError] = createSignal<string | null>(null);
   const [playing, setPlaying] = createSignal(false);
+  const [picked, setPicked] = createSignal<KeyColumn | null>(null);
   let counter = 0;
   let renderer: MeshRenderer | undefined;
   const sync = new SceneSync();
@@ -149,12 +152,13 @@ export function Editor() {
             )}
           </Show>
         </svg>
+        <Graph ctrl={ctrl} tick={tick} picked={picked} />
         <Show when={error()}>
           <p class="error">WebGPU unavailable: {error()}</p>
         </Show>
       </div>
       <Props ctrl={ctrl} tick={tick} />
-      <Timeline ctrl={ctrl} tick={tick} />
+      <Timeline ctrl={ctrl} tick={tick} picked={picked} setPicked={setPicked} />
       <footer class="bar">
         <button onClick={() => setPlaying(!playing())}>{playing() ? "Pause" : "Play"}</button>
         <input
