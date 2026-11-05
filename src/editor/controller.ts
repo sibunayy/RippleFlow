@@ -7,7 +7,7 @@ import { tessellateFill } from "../geometry/fill";
 import { flatten } from "../geometry/path";
 import { parseSvgPath } from "../geometry/svgPath";
 import type { FrameRef } from "../video/videoLibrary";
-import { buildImageGeometry, buildShapeGeometry, buildVideoGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
+import { buildImageGeometry, buildLayerGeometry, buildVideoGeometry, type ShapeGeometry } from "../geometry/layerGeometry";
 import { TwoFingerGesture } from "../input/twoFingerGesture";
 import { applyWorldDelta, transformLayer } from "./transformEdit";
 import { addLayer, addMask, editShape, patchMask } from "../core/commands";
@@ -342,8 +342,8 @@ export class EditorController {
     if (!shape) return undefined;
     let g = this.geometry.get(shape);
     if (!g) {
-      g = buildShapeGeometry(shape);
-      this.geometry.set(shape, g);
+      g = buildLayerGeometry(layer, () => undefined);
+      if (g) this.geometry.set(shape, g);
     }
     return g;
   }

@@ -21,6 +21,7 @@ import {
 import { Compositing } from "./Compositing";
 import { Effects } from "./Effects";
 import { ScrubField } from "./ScrubField";
+import { TextPanel } from "./TextPanel";
 
 const FILL_MODES: { id: FillMode; label: string }[] = [
   { id: "none", label: "None" },
@@ -221,6 +222,7 @@ export function Style(props: { ctrl: EditorController; tick: () => number; notif
                   </>
                 )}
               </Show>
+              <TextPanel ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
               <Compositing ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
               <Effects ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
             </div>

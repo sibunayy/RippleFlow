@@ -14,7 +14,7 @@ import { VideoLibrary, type VideoMode } from "../video/videoLibrary";
 import { MemoryAssets, OpfsAssets, type AssetStore } from "../persist/assets";
 import { serialize } from "../persist/serialize";
 import { addLayer, sequence, setDuration } from "../core/commands";
-import { addShape, newNullLayer, newImageLayer, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
+import { addShape, newNullLayer, newTextLayer, newImageLayer, newVideoLayer, nextLayerNumber, type ShapeKind } from "./shapes";
 import type { KeyColumn } from "../editor/keyframeEdit";
 import { ExportDialog } from "./ExportDialog";
 import { Graph } from "./Graph";
@@ -283,6 +283,13 @@ export function Editor() {
     ctrl.execute(addShape(kind, n, ctrl.document.width, ctrl.document.height));
     ctrl.setSelection(id);
   };
+  const addText = () => {
+    const layer = newTextLayer(nextLayerNumber(ctrl.document.layers), "Hello", ctrl.document.width, ctrl.document.height);
+    if (!layer) return setNotice("Text could not be created: the font is not loaded.");
+    ctrl.execute(addLayer(layer));
+    ctrl.setSelection(layer.id);
+    setStyleOpen(true);
+  };
   const addNull = () => {
     const layer = newNullLayer(nextLayerNumber(ctrl.document.layers), ctrl.document.width, ctrl.document.height);
     ctrl.execute(addLayer(layer));
@@ -297,7 +304,7 @@ export function Editor() {
   const nodeView = () => (tick(), ctrl.nodeOverlay());
   const penView = () => (tick(), ctrl.penOverlay());
   const penning = () => (tick(), ctrl.penTarget !== null);
-  const canEditPoints = () => (tick(), !!ctrl.document.layers.find((l) => l.id === ctrl.selection)?.shape);
+  const canEditPoints = () => (tick(), (() => { const l = ctrl.document.layers.find((x) => x.id === ctrl.selection); return !!l?.shape && !l.text; })());
 
   return (
     <div class="app">
@@ -306,6 +313,7 @@ export function Editor() {
         <button onClick={() => add("rect")}>Rect</button>
         <button onClick={() => add("ellipse")}>Ellipse</button>
         <button onClick={() => add("star")}>Star</button>
+        <button onClick={addText}>Text</button>
         <button onClick={addNull}>Null</button>
         <button onClick={() => fileInput.click()}>Image</button>
         <button onClick={() => videoInput.click()}>Video</button>

@@ -1,6 +1,6 @@
 import { BLEND_MODES, MAX_GRADIENT_STOPS, type BlendMode, type Effect, type EffectType, type Gradient, type Mask, type Matte } from "../core/types";
 import { EFFECT_BY_TYPE } from "../core/effects";
-import type { Bezier, Composition, ImageContent, Keyframe, Layer, Rgba, ShapeContent, Track, Transform, VideoContent } from "../core/types";
+import type { Bezier, Composition, ImageContent, Keyframe, Layer, Rgba, ShapeContent, TextContent, Track, Transform, VideoContent } from "../core/types";
 
 /** Bump when the stored shape changes, and add a step to `migrate`. */
 export const FORMAT_VERSION = 1;
@@ -119,6 +119,36 @@ function gradient(v: unknown, what: string): Gradient {
   return { kind, angle: v.angle === undefined ? 0 : num(v.angle, `${what}.angle`), stops };
 }
 
+function text(v: unknown, what: string): TextContent {
+  if (!isObj(v)) return fail(`${what} must be an object`);
+  const size = num(v.size, `${what}.size`);
+  if (size <= 0) fail(`${what}.size must be positive`);
+  const align = (["left", "center", "right"] as const).find((a) => a === v.align) ?? fail(`${what}.align`);
+  const out: { -readonly [K in keyof TextContent]: TextContent[K] } = { text: str(v.text, `${what}.text`), size, tracking: num(v.tracking, `${what}.tracking`), align };
+  if (v.animator !== undefined) {
+    const a = v.animator;
+    if (!isObj(a) || !isObj(a.from)) return fail(`${what}.animator must be an object with from`);
+    const unit = (["char", "word", "line"] as const).find((u) => u === a.unit) ?? fail(`${what}.animator.unit`);
+    const duration = num(a.duration, `${what}.animator.duration`);
+    if (duration < 0) fail(`${what}.animator.duration must not be negative`);
+    out.animator = {
+      unit,
+      start: num(a.start, `${what}.animator.start`),
+      stagger: num(a.stagger, `${what}.animator.stagger`),
+      duration,
+      ease: bezier(a.ease, `${what}.animator.ease`),
+      from: {
+        opacity: num(a.from.opacity, `${what}.animator.from.opacity`),
+        dx: num(a.from.dx, `${what}.animator.from.dx`),
+        dy: num(a.from.dy, `${what}.animator.from.dy`),
+        scale: num(a.from.scale, `${what}.animator.from.scale`),
+        rotation: num(a.from.rotation, `${what}.animator.from.rotation`),
+      },
+    };
+  }
+  return out;
+}
+
 function shape(v: unknown, what: string): ShapeContent {
   if (!isObj(v)) return fail(`${what} must be an object`);
   const out: { path: string; fill?: Rgba; gradient?: Gradient; stroke?: ShapeContent["stroke"] } = { path: str(v.path, `${what}.path`) };
@@ -176,6 +206,7 @@ function layer(v: unknown, i: number): Layer {
   if (v.effects !== undefined) out.effects = effects(v.effects, `${what}.effects`);
   if (v.parent !== undefined) out.parent = str(v.parent, `${what}.parent`);
   if (v.shape !== undefined) out.shape = shape(v.shape, `${what}.shape`);
+  if (v.text !== undefined) out.text = text(v.text, `${what}.text`);
   if (v.image !== undefined) out.image = image(v.image, `${what}.image`);
   if (v.video !== undefined) out.video = video(v.video, `${what}.video`);
   if (kind === "video" && !out.video) fail(`${what} is a video layer without video content`);

@@ -1,6 +1,7 @@
 import type { Affine } from "./affine";
 import { opacityAt, worldMatrices } from "./layerTransform";
 import type { BlendMode, Composition, Id, Layer, Mask, MatteMode } from "./types";
+import { textUnits, unitStates, type UnitState } from "./text";
 import { resolveEffects, type ResolvedFx } from "./effects";
 
 /** One layer, resolved for a single instant: ready for a renderer. */
@@ -15,6 +16,8 @@ export interface SceneItem {
   /** Enabled effects with values at this instant. Empty for most layers. */
   readonly effects: readonly ResolvedFx[];
   readonly masks: readonly Mask[];
+  /** Text layers with an animator: how each character/word/line is displaced now. */
+  readonly units?: readonly UnitState[];
   /** The matte layer evaluated at this instant. `source` is null when it is not visible now (an empty matte). */
   readonly matte?: { readonly mode: MatteMode; readonly source: SceneItem | null };
 }
@@ -41,6 +44,7 @@ export function evaluateScene(comp: Composition, t: number): SceneItem[] {
       blend: layer.blend ?? "normal",
       effects: withMatte ? resolveEffects(layer, t) : [],
       masks: withMatte ? (layer.masks ?? []) : [],
+      ...(layer.text?.animator ? { units: unitStates(layer.text.animator, textUnits(layer.text.text, layer.text.animator.unit).length, t) } : {}),
     };
     if (!withMatte || !layer.matte) return item;
     const src = comp.layers.find((l) => l.id === layer.matte!.source);

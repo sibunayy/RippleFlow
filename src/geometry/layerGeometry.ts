@@ -7,6 +7,7 @@ import type { Mesh } from "./mesh";
 import { rectMesh } from "./rect";
 import { tessellateStroke } from "./stroke";
 import { parseSvgPath } from "./svgPath";
+import { fontLoaded, layoutText, type LaidOutUnit } from "../text/glyphs";
 
 export interface ShapePart {
   readonly mesh: Mesh;
@@ -23,6 +24,9 @@ export interface ShapePart {
    * scaled space; draw it with the layer matrix divided by (sx, sy).
    */
   readonly strokeAt?: (sx: number, sy: number) => Mesh;
+  /** Text layers with an animator: which character/word/line this part belongs to, and the point it turns and scales about. */
+  readonly unit?: number;
+  readonly pivot?: readonly [number, number];
   /** Paint this gradient over `bbox` instead of the flat color. */
   readonly gradient?: { readonly gradient: Gradient; readonly bbox: { x: number; y: number; w: number; h: number } };
 }
@@ -140,7 +144,33 @@ export function buildVideoGeometry(video: VideoContent): ShapeGeometry {
 }
 
 /** Geometry for any layer kind. `bitmapOf` resolves an image asset id once it has loaded. */
+/** Geometry for animated text: one set of parts per unit, so each can move on its own. */
+export function buildTextGeometry(shape: ShapeContent, units: readonly LaidOutUnit[]): ShapeGeometry {
+  const parts: ShapePart[] = [];
+  let bounds: Bounds | undefined;
+  units.forEach((u, i) => {
+    if (u.path === "") return;
+    const g = buildShapeGeometry({ ...shape, path: u.path });
+    for (const p of g.parts) parts.push({ ...p, unit: i, pivot: u.pivot });
+    if (g.bounds) {
+      const b = g.bounds;
+      bounds = bounds ? { x: Math.min(bounds.x, b.x), y: Math.min(bounds.y, b.y), w: Math.max(bounds.x + bounds.w, b.x + b.w) - Math.min(bounds.x, b.x), h: Math.max(bounds.y + bounds.h, b.y + b.h) - Math.min(bounds.y, b.y) } : b;
+    }
+  });
+  // A gradient spans the whole text, not each letter.
+  const boxes = parts.flatMap((p) => (p.gradient ? [p.gradient.bbox] : []));
+  if (boxes.length) {
+    const x0 = Math.min(...boxes.map((b) => b.x)), y0 = Math.min(...boxes.map((b) => b.y));
+    const whole = { x: x0, y: y0, w: Math.max(...boxes.map((b) => b.x + b.w)) - x0, h: Math.max(...boxes.map((b) => b.y + b.h)) - y0 };
+    parts.forEach((p, i) => {
+      if (p.gradient) parts[i] = { ...p, gradient: { ...p.gradient, bbox: whole } };
+    });
+  }
+  return { parts, bounds };
+}
+
 export function buildLayerGeometry(layer: Layer, bitmapOf: (asset: string) => ImageBitmap | undefined): ShapeGeometry | undefined {
+  if (layer.shape && layer.text?.animator && fontLoaded()) return buildTextGeometry(layer.shape, layoutText(layer.text).units);
   if (layer.shape) return buildShapeGeometry(layer.shape);
   if (layer.image) return buildImageGeometry(layer.image, bitmapOf(layer.image.asset));
   if (layer.video) return buildVideoGeometry(layer.video);

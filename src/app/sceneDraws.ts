@@ -27,19 +27,30 @@ function layerDraws(item: SceneItem, g: ShapeGeometry, toDevice: Affine, mediaOf
   for (const part of g.parts) {
     let mesh = part.mesh;
     let base = layerToDevice;
+    let alpha = item.opacity;
+    // Animated text: this part's character/word/line is displaced about its own pivot.
+    const us = part.unit !== undefined ? item.units?.[part.unit] : undefined;
+    if (us && part.pivot) {
+      const [px, py] = part.pivot;
+      const c = Math.cos(us.rotation) * us.scale;
+      const s = Math.sin(us.rotation) * us.scale;
+      const move: Affine = [c, s, -s, c, px + us.dx - c * px + s * py, py + us.dy - s * px - c * py];
+      base = multiply(base, move);
+      alpha *= us.opacity;
+    }
     // Non-uniform layer scale would thin a stroke along one axis; rebuild it in scaled space instead.
     if (part.strokeAt && sx > 1e-9 && sy > 1e-9 && Math.abs(sx - sy) > 1e-3 * Math.max(sx, sy)) {
       mesh = part.strokeAt(sx, sy);
-      base = multiply(layerToDevice, [1 / sx, 0, 0, 1 / sy, 0, 0]);
+      base = multiply(base, [1 / sx, 0, 0, 1 / sy, 0, 0]);
     }
     if (mesh.indices.length === 0) continue;
     const transform = part.local ? multiply(base, part.local) : base;
     if (part.video) {
       const m = mediaOf?.(item.id);
       if (!m || (!m.frame && !m.image)) continue;
-      out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(m.frame ? { frame: m.frame } : { image: m.image! }) });
+      out.push({ mesh, color: part.color, transform, opacity: alpha, blend: item.blend, ...(m.frame ? { frame: m.frame } : { image: m.image! }) });
     } else {
-      out.push({ mesh, color: part.color, transform, opacity: item.opacity, blend: item.blend, ...(part.image ? { image: part.image } : {}), ...(part.gradient ? { gradient: part.gradient } : {}) });
+      out.push({ mesh, color: part.color, transform, opacity: alpha, blend: item.blend, ...(part.image ? { image: part.image } : {}), ...(part.gradient ? { gradient: part.gradient } : {}) });
     }
   }
   return out;
