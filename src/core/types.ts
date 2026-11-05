@@ -45,6 +45,9 @@ export interface Layer {
   readonly kind: "shape" | "image" | "video";
   readonly parent?: Id;
   readonly transform: Transform;
+  /** Seconds. The layer is visible for inPoint <= t < outPoint. Defaults: 0 and the composition duration. */
+  readonly inPoint?: number;
+  readonly outPoint?: number;
 }
 
 export interface Composition {

@@ -40,3 +40,32 @@ export function worldMatrix(layers: readonly Layer[], id: Id, t: number): Affine
   }
   return m;
 }
+
+/**
+ * World matrices for every layer at time t in one pass (memoized), so cost is
+ * linear in the layer count. Throws on a parent cycle or a missing parent.
+ */
+export function worldMatrices(layers: readonly Layer[], t: number): Map<Id, Affine> {
+  const byId = new Map(layers.map((l) => [l.id, l]));
+  const out = new Map<Id, Affine>();
+  const visiting = new Set<Id>();
+
+  const resolve = (layer: Layer): Affine => {
+    const known = out.get(layer.id);
+    if (known) return known;
+    if (visiting.has(layer.id)) throw new Error(`Parent cycle through layer ${layer.id}`);
+    visiting.add(layer.id);
+    let m = localMatrix(layer, t);
+    if (layer.parent !== undefined) {
+      const parent = byId.get(layer.parent);
+      if (!parent) throw new Error(`Layer ${layer.id} has missing parent ${layer.parent}`);
+      m = multiply(resolve(parent), m);
+    }
+    visiting.delete(layer.id);
+    out.set(layer.id, m);
+    return m;
+  };
+
+  for (const l of layers) resolve(l);
+  return out;
+}
