@@ -38,7 +38,7 @@ scripts/ship.sh <branch> "<title>" "<body>"   # push, open PR via REST, wait for
 | To change… | Look in |
 | --- | --- |
 | Document types (Layer, Track, Keyframe, Effect, Mask…) | `src/core/types.ts`. A new stored field also needs a parser entry in `src/persist/serialize.ts` (it strips unknown fields) |
-| Any edit as an undoable command | `src/core/commands.ts` (`editLayer`, `editShape`, `sequence`, `transformLayer`); history in `src/core/history.ts` |
+| Any edit as an undoable command | `src/core/commands.ts` (`editLayer`, `editShape`, `sequence`); transform/move/scale commands `src/editor/transformEdit.ts` (`transformLayer`); history `src/core/history.ts` |
 | What is on screen at time t (shared by preview AND export) | `src/core/scene.ts` `evaluateScene`; transforms `layerTransform.ts`; easing/keyframes `evaluate.ts`, `easing.ts` |
 | Animation presets, text animator maths, effect specs | `src/core/presets.ts`, `src/core/text.ts`, `src/core/effects.ts` |
 | Editor state and pointer behaviour | `src/editor/controller.ts` (selection, auto-key, pen/points/pins modes, overlays). Tools: `selectTool.ts`, `penTool.ts`, `nodeTool.ts`, `handles.ts`, `hitTest.ts`. Pure edit helpers beside them (`styleEdit`, `effectEdit`, `maskEdit`, `trimEdit`, `align`, `keyframeEdit`, `easingEdit`) |
@@ -52,7 +52,7 @@ scripts/ship.sh <branch> "<title>" "<body>"   # push, open PR via REST, wait for
 | Look and layout | `src/app/theme.css` (design system; loaded after `app.css`, which holds structure). Portrait rules are the `@media (max-width: 900px)` block at the bottom |
 | Touch/Pencil input maths | `src/input/` (pure) |
 
-Data flow in one line: `ctrl.execute(command)` → `Composition` (immutable) → `evaluateScene(comp, t)` → `SceneSync`/`sceneDraws` → `MeshRenderer`; export runs the same `evaluateScene` offscreen.
+Data flow in one line: `ctrl.execute(command)` → `Composition` (immutable) → `evaluateScene(comp, t)` → `SceneSync` + `layerDraws` (both in `src/app/sceneDraws.ts`) → `MeshRenderer`; export runs the same `evaluateScene` offscreen.
 
 Track keys: transform props by name, effect params `fx:<effectId>:<name>`, trim `trim:start|end` (`TrackPath` in `src/editor/keyframeEdit.ts`).
 
