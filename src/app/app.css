@@ -43,6 +43,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: var(--ink);
   font-size: 15px;
 }
+/* iOS/iPadOS 27 blurs the top edge of standalone PWAs; keep the top bar's hit targets below it. */
+@media (display-mode: standalone) { .app { padding-top: calc(env(safe-area-inset-top) + 14px); } }
 .app.insp-collapsed { grid-template-columns: 76px minmax(0, 1fr); grid-template-areas: "top top" "rail stage" "time time"; }
 .app.insp-collapsed .inspector { display: none; }
 
