@@ -18,7 +18,7 @@ function serviceWorker(): Plugin {
     closeBundle() {
       const files = walk(outDir)
         .map((f) => relative(outDir, f).split("\\").join("/"))
-        .filter((f) => f !== "sw.js" && !f.startsWith("clips/")) // clips are test media, fetched on demand
+        .filter((f) => f !== "sw.js")
         .sort();
       const hash = createHash("sha256");
       for (const f of files) hash.update(f).update(readFileSync(join(outDir, f)));
@@ -43,6 +43,6 @@ export default defineConfig({
   define: { __BUILD_ID__: JSON.stringify(buildId()) },
   plugins: [solid(), serviceWorker()],
   base: "./",
-  build: { rollupOptions: { input: { main: "index.html", spike: "spike.html", export: "export.html", video: "video.html", input: "input.html" } } },
+  build: { rollupOptions: { input: { main: "index.html" } } },
   test: { environment: "node", include: ["src/**/*.test.ts"] },
 });

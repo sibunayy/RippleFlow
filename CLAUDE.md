@@ -56,7 +56,9 @@ Data flow in one line: `ctrl.execute(command)` → `Composition` (immutable) →
 
 Track keys: transform props by name, effect params `fx:<effectId>:<name>`, trim `trim:start|end` (`TrackPath` in `src/editor/keyframeEdit.ts`).
 
-`src/spike/` and the root `*.html` pages (spike, export, video, input) are Phase 0 device test pages. Leave them alone unless a Phase 0 question comes back. `docs/phase0-results.md` has the measurements, `docs/transform-design.md` explains per-layer transform drawing, `docs/mvp-plan.md` is the original (now historical) plan.
+`docs/phase0-results.md` has the Phase 0 device measurements (the spike pages are gone; see git history before #68 if one is needed), `docs/transform-design.md` explains per-layer transform drawing.
+
+Claude Code read-deny rules (fonts, binaries, `public/`, lockfile, `dist/`) live in `.claude/settings.json`; do not open those files.
 
 ## Testing
 

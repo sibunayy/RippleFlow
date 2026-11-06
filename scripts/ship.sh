@@ -27,3 +27,4 @@ for i in $(seq 1 40); do
   if [ -n "$S" ] && ! echo "$S" | grep -q "in_progress\|queued"; then break; fi
 done
 gh api -X PUT "repos/sibunayy/RippleFlow/pulls/$N/merge" -f merge_method=squash --jq .merged
+gh api -X DELETE "repos/sibunayy/RippleFlow/git/refs/heads/$B" >/dev/null 2>&1 || true
