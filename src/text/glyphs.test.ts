@@ -1,3 +1,4 @@
+import { parseSvgPath } from "../geometry/svgPath";
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { fontLoaded, layoutText, setFontData } from "./glyphs";
@@ -65,6 +66,16 @@ describe("animated text geometry and scene", () => {
     const comp = (l: Layer): Composition => ({ width: 100, height: 100, fps: 30, duration: 2, layers: [l] });
     expect(evaluateScene(comp(layer(content({ animator: DEFAULT_ANIMATOR }))), 0.1)[0]!.units).toHaveLength(5);
     expect(evaluateScene(comp(layer(content())), 0.1)[0]!.units).toBeUndefined();
+  });
+});
+
+describe("pathData", () => {
+  it("never emits NaN where opentype toPathData does (Pacifico R at baseline 130.3)", () => {
+    const b = readFileSync(new URL("./fonts/Pacifico-Regular.woff", import.meta.url));
+    setFontData(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer, "pacifico");
+    const p = layoutText(content({ text: "Rag", font: "pacifico" })).path;
+    expect(p).not.toMatch(/NaN/);
+    expect(() => parseSvgPath(p)).not.toThrow();
   });
 });
 

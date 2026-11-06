@@ -120,3 +120,16 @@ progress { accent-color: var(--mint); }
 .top-right { gap: 8px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .round { position: relative; }
+
+/* iPad feedback: the app never scrolls as a page, and the top bar survives portrait. */
+html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; overscroll-behavior: none; touch-action: none; background: var(--ink); }
+.tl-body, .style, .sheet, .plist, .props-pop { touch-action: pan-y; overscroll-behavior: contain; }
+.tl-track, .grip, .stage canvas, .scrub, .key, .bar-range, .trim, .graph svg, .g-handle { touch-action: none; }
+@media (max-width: 900px) {
+  .bar.top { grid-template-columns: auto 1fr; row-gap: 6px; }
+  .bar.top .transport { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  .top-right { gap: 6px; flex-wrap: nowrap; }
+  .bar .pill { min-height: 40px; padding: 0 10px; font-size: 12px; white-space: nowrap; flex: none; }
+  .bar.top .proj { font-size: 18px; max-width: 40vw; }
+  .bar.top .save, .bar.top .build { display: none; }
+}
