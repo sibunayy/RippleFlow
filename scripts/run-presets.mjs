@@ -6,6 +6,7 @@ const page = await (await browser.newContext({ viewport: { width: 1180, height: 
 const errors = []; page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300);
 await page.getByRole("button", { name: "Rect", exact: true }).click();
+await page.getByRole("button", { name: "Transform", exact: true }).click();
 const op = (t) => page.evaluate((t) => { const c = window.__rf.ctrl; const k = c.document.layers[0].transform.opacity.keys; return k.length; }, t);
 await page.getByRole("button", { name: "Pop in", exact: true }).click();
 await page.getByRole("button", { name: "Fade out", exact: true }).click();
