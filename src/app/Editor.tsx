@@ -354,9 +354,6 @@ export function Editor() {
         <div class="transport">
           <button class="t-play" aria-label={playing() ? "Pause" : "Play"} onClick={() => setPlaying(!playing())}>{playing() ? "❚❚" : "▶"}</button>
           <span class="time">{(tick(), fmtTime(ctrl.time))}<span class="of"> / {ctrl.document.duration.toFixed(1)}</span></span>
-          <label class="autokey" title="Record changes as keyframes">
-            <input type="checkbox" onChange={(e) => (ctrl.autoKey = e.currentTarget.checked)} /> Auto-key
-          </label>
         </div>
         <div class="top-right">
           <span class="build" title="Build">{typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "dev"}</span>

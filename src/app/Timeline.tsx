@@ -133,9 +133,15 @@ export function Timeline(props: {
     ctrl.execute(moveLayer(id, i + dir));
   };
 
+  const [autoKey, setAutoKey] = createSignal(ctrl.autoKey);
   return (
-    <div class="timeline">
+    <div class="timeline" classList={{ "ak-on": autoKey() }}>
       <div class="tl-tools">
+        <label class="autokey" classList={{ on: autoKey() }} title="Record changes as keyframes">
+          <input type="checkbox" checked={autoKey()} onChange={(e) => { ctrl.autoKey = e.currentTarget.checked; setAutoKey(e.currentTarget.checked); }} />
+          <span class="dot" aria-hidden="true" />
+          <span>Auto-key {autoKey() ? "on" : "off"}</span>
+        </label>
         <button onClick={() => shift(1)} disabled={(props.tick(), ctrl.selection === null)}>Raise</button>
         <button onClick={() => shift(-1)} disabled={(props.tick(), ctrl.selection === null)}>Lower</button>
         <button onClick={dup} disabled={(props.tick(), ctrl.selection === null)}>Duplicate</button>
