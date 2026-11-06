@@ -53,7 +53,7 @@ export function Editor() {
   const [tab, setTab] = createSignal<InspectorTab>("transform");
   const [inspCollapsed, setInspCollapsed] = createSignal(false);
   const [fly, setFly] = createSignal<{ kind: "shapes" | "media"; left: number; top: number } | null>(null);
-  const [tlH, setTlH] = createSignal(276);
+  const [tlH, setTlH] = createSignal(320);
   let tlStart: number | null = null;
   const resizeTimeline = (dy: number, done: boolean) => {
     if (tlStart === null) tlStart = tlH();

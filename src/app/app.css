@@ -36,7 +36,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   height: 100%;
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr) 308px;
-  grid-template-rows: 56px minmax(0, 1fr) var(--tl-h, 276px);
+  grid-template-rows: 56px minmax(0, 1fr) var(--tl-h, 320px);
   grid-template-areas: "top top top" "rail stage insp" "time time time";
   gap: 8px;
   padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
@@ -302,10 +302,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (orientation: portrait), (max-width: 900px) {
   .app, .app.insp-collapsed {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 56px minmax(0, 1fr) var(--tl-h, 276px) 232px;
+    grid-template-rows: 56px minmax(0, 1fr) var(--tl-h, 320px) 232px;
     grid-template-areas: "top" "stage" "time" "insp";
   }
-  .app.insp-collapsed { grid-template-rows: 56px minmax(0, 1fr) var(--tl-h, 276px) auto; }
+  .app.insp-collapsed { grid-template-rows: 56px minmax(0, 1fr) var(--tl-h, 320px) auto; }
   .app.insp-collapsed .inspector { display: flex; }
   .app.insp-collapsed .insp-body { display: none; }
   .insp-reopen { display: none; }
