@@ -1,12 +1,11 @@
 // Usage: node scripts/run-svg.mjs "<app url>?debug&noloop"
-import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
-const { chromium } = createRequire(import.meta.url)("playwright");
+import { launch } from "./lib/browser.mjs";
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="0" y="0" width="100" height="100" fill="#ff0000"/><circle cx="50" cy="50" r="25" fill="#0000ff"/></svg>`;
 const gsvg = `<svg viewBox="0 0 100 100"><defs><linearGradient id="g"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/></svg>`;
 writeFileSync("/tmp/rf-grad.svg", gsvg);
 const file = "/tmp/rf-test.svg"; writeFileSync(file, svg);
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
 const errors = []; page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300);

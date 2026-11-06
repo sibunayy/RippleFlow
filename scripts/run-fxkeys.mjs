@@ -1,8 +1,7 @@
 // Usage: node scripts/run-fxkeys.mjs "<app url>?debug&noloop"
 // Effect and trim keyframes appear as timeline diamonds and can be deleted from there.
-import { createRequire } from "node:module";
-const { chromium } = createRequire(import.meta.url)("playwright");
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+import { launch } from "./lib/browser.mjs";
+const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));

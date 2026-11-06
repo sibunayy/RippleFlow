@@ -1,8 +1,7 @@
 // Usage: node scripts/run-projects.mjs "<app url>?debug&noloop"
 // New / open / rename / duplicate / delete projects, backup bundle round trip with an image.
-import { createRequire } from "node:module";
-const { chromium } = createRequire(import.meta.url)("playwright");
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+import { launch } from "./lib/browser.mjs";
+const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 820 }, acceptDownloads: true })).newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));

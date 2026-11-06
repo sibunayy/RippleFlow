@@ -1,10 +1,9 @@
 // Usage: node scripts/run-export-app.mjs "<app url>?debug&noloop" <out.mp4>
 // Loads a known composition, exports it through the Export dialog, and saves the MP4 for external checks (ffprobe/ffmpeg).
-import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
-const { chromium } = createRequire(import.meta.url)("playwright");
+import { launch } from "./lib/browser.mjs";
 const [url, out] = process.argv.slice(2);
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 820 } })).newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));

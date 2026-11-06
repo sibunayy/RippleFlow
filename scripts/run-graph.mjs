@@ -1,8 +1,7 @@
 // Usage: node scripts/run-graph.mjs "<app url>?debug&noloop"
 // Animates X with auto-key, opens the Curves view, picks the first key, and edits its easing by dragging handles and the Easing menu.
-import { createRequire } from "node:module";
-const { chromium } = createRequire(import.meta.url)("playwright");
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+import { launch } from "./lib/browser.mjs";
+const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 820 } })).newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));

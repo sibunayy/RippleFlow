@@ -1,8 +1,7 @@
 // Usage: node scripts/run-persist.mjs "<app url>?debug&noloop"
 // Edits, waits for autosave, reloads and checks the project came back; then corrupts the file and checks it is preserved.
-import { createRequire } from "node:module";
-const { chromium } = createRequire(import.meta.url)("playwright");
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+import { launch } from "./lib/browser.mjs";
+const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 820 } })).newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));

@@ -1,11 +1,8 @@
 // Usage: node scripts/run-editor.mjs "<url of the app>?debug&noloop"
 // Adds a shape, drags it with a simulated pen, checks pixels by offscreen readback, then pinches the view.
-import { createRequire } from "node:module";
-const { chromium } = createRequire(import.meta.url)("playwright");
+import { launch } from "./lib/browser.mjs";
 
-const browser = await chromium.launch({
-  args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"],
-});
+const browser = await launch();
 const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 }, deviceScaleFactor: 1, hasTouch: true });
 const page = await ctx.newPage();
 const errors = [];
