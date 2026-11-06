@@ -1,9 +1,8 @@
 // Usage: node scripts/run-stagger.mjs "<app url>?debug&noloop"
-import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
-const { chromium } = createRequire(import.meta.url)("playwright");
+import { launch } from "./lib/browser.mjs";
 writeFileSync("/tmp/rf-stagger.svg", `<svg viewBox="0 0 300 100"><rect x="0" y="0" width="80" height="80" fill="#fff"/><rect x="110" y="0" width="80" height="80" fill="#fff"/><rect x="220" y="0" width="80" height="80" fill="#fff"/></svg>`);
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
 const errors = []; page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300);

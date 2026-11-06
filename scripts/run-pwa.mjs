@@ -1,11 +1,10 @@
 // Usage: node scripts/run-pwa.mjs <base url ending in />   (serve a production build first: vite preview)
 // Checks: manifest + icons load, the service worker installs, the app launches offline, and an update is offered and applied.
-import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
-const { chromium } = createRequire(import.meta.url)("playwright");
+import { launch } from "./lib/browser.mjs";
 const base = process.argv[2];
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const browser = await launch();
 const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 } });
 const page = await ctx.newPage();
 const errors = [];

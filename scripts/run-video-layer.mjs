@@ -1,10 +1,9 @@
 // Usage: node scripts/run-video-layer.mjs "<app url>?debug&noloop&videoMode=bitmap" <coded.mp4> <rotated.mp4> <out.mp4>
 // Imports the frame-index-coded clip through the real UI and checks, from rendered pixels, that every playhead time shows the right frame.
-import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
-const { chromium } = createRequire(import.meta.url)("playwright");
+import { launch } from "./lib/browser.mjs";
 const [url, clip, rot, out] = process.argv.slice(2);
-const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU", "--use-angle=swiftshader", "--use-webgpu-adapter=swiftshader"] });
+const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 820 } })).newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
