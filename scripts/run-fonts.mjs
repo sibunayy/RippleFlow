@@ -24,7 +24,7 @@ for (const id of ["poppins", "bebas", "playfair", "pacifico", "spacemono"]) {
   check(`font ${id} outline differs`, !seen.has(l.shape.path));
   seen.add(l.shape.path);
 }
-await page.getByText("Undo", { exact: true }).click();
+await page.getByRole("button", { name: "Undo" }).click();
 check("undo goes back one font", (await layer()).text.font === "pacifico");
 await page.locator("select.font-select").selectOption("inter");
 await page.waitForTimeout(300);

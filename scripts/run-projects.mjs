@@ -13,22 +13,22 @@ await page.waitForTimeout(500);
 const layers = () => page.evaluate(() => window.__rf.ctrl.document.layers.map((l) => l.name));
 const name = () => page.evaluate(() => window.__rf.ctrl.document.name);
 const rows = () => page.locator(".plist li strong").allInnerTexts();
-const dialog = async () => { await page.locator(".bar .proj").click(); await page.waitForSelector(".plist li strong"); };
+const dialog = async () => { await page.locator(".proj").click(); await page.waitForSelector(".plist li strong"); };
 const saved = () => page.waitForFunction(() => document.querySelector(".save").textContent === "Saved", null, { timeout: 5000 });
 
 console.log("first run name:", await name());
-await page.getByText("Star", { exact: true }).click(); await saved();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Star", exact: true }).click(); await saved();
 await dialog();
 await page.getByLabel("Project name").fill("Logo A"); await page.getByLabel("Project name").press("Enter"); await page.waitForTimeout(300);
 console.log("rows after rename:", await rows());
 await page.getByText("New project", { exact: true }).click(); await page.waitForTimeout(400);
 console.log("new project:", await name(), JSON.stringify(await layers()), "dialog closed:", await page.locator(".modal").count() === 0);
-await page.getByText("Ellipse", { exact: true }).click(); await saved();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Ellipse", exact: true }).click(); await saved();
 await dialog();
 console.log("rows:", await rows());
 await page.locator(".plist li", { hasText: "Logo A" }).locator(".pick").click(); await page.waitForTimeout(500);
 console.log("opened Logo A:", await name(), JSON.stringify(await layers()));
-await page.getByText("Rect", { exact: true }).click(); await saved();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click(); await saved();
 // Reload remembers the last project.
 await page.reload(); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(500);
 console.log("after reload:", await name(), JSON.stringify(await layers()));

@@ -10,7 +10,6 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 const open = async () => { await page.goto(url); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300); };
-await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
 const frame = () => page.evaluate(() => window.__rf.frame());
 // Pixel at a COMPOSITION point, through the editor view, by offscreen readback.
 const px = (cx, cy) => page.evaluate(async ([cx, cy]) => {
@@ -35,10 +34,10 @@ console.log("layer:", l.kind, l.name, JSON.stringify(l.image), "scale", l.transf
 await check("on screen:");
 
 // Opacity 50% over the white backdrop -> colours wash out toward white.
-await page.getByLabel("Opacity %").fill("50"); await page.getByLabel("Opacity %").press("Enter");
+await page.getByLabel("Opacity percent").fill("50"); await page.getByLabel("Opacity percent").press("Enter");
 await frame();
 console.log("50% opacity red over white (expect ~255,128,128):", await px(744, 378));
-await page.getByLabel("Opacity %").fill("100"); await page.getByLabel("Opacity %").press("Enter");
+await page.getByLabel("Opacity percent").fill("100"); await page.getByLabel("Opacity percent").press("Enter");
 
 // Large picture is downscaled on import.
 await page.setInputFiles('input[accept="image/*"]', big);

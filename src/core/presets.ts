@@ -124,3 +124,62 @@ export function applyPresetToChildren(parentId: Id, presetId: string, compDurati
     },
   };
 }
+
+/** The keys a preset wrote, on one track, in the half of the layer's range that `kind` uses. */
+function presetKeys(track: Track, kind: "in" | "out", a: number, b: number): Keyframe[] {
+  const mid = (a + b) / 2;
+  return track.keys.filter((k) => k.id.includes("@pre-") && (kind === "in" ? k.t <= mid + EPS : k.t >= mid - EPS));
+}
+
+const TOUCHED = (kind: "in" | "out"): Prop[] => [...new Set(PRESETS.filter((p) => p.kind === kind).flatMap((p) => Object.keys(p.props) as Prop[]))];
+
+/**
+ * Which ready-made motion a layer currently carries at its in-point ("in") or out-point ("out"), or null.
+ * Recognised from the keys `applyPreset` wrote: their tracks, count and relative timing.
+ */
+export function detectPreset(layer: Layer, kind: "in" | "out", compDuration: number): string | null {
+  const a = layer.inPoint ?? 0;
+  const b = layer.outPoint ?? compDuration;
+  for (const p of PRESETS) {
+    if (p.kind !== kind) continue;
+    const dur = Math.min(p.dur, Math.max(0, b - a));
+    if (dur <= 0) continue;
+    let ok = true;
+    let start: number | null = null;
+    for (const prop of TOUCHED(kind)) {
+      const keys = presetKeys(layer.transform[prop], kind, a, b);
+      const stops = p.props[prop];
+      if (!stops) {
+        if (keys.length) ok = false;
+        continue;
+      }
+      if (keys.length !== stops.length) { ok = false; break; }
+      // Stops are relative to the preset's span: line them up with the first stop of the first track seen.
+      const t0 = keys[0]!.t - stops[0]!.at * dur;
+      if (start === null) start = t0;
+      if (Math.abs(t0 - start) > 1e-3 || stops.some((s, i) => Math.abs(keys[i]!.t - (t0 + s.at * dur)) > 1e-3)) { ok = false; break; }
+    }
+    if (ok && start !== null) return p.id;
+  }
+  return null;
+}
+
+/** Remove the ready-made motion at a layer's in- or out-point, leaving the property at its settled value. */
+export function clearPreset(layerId: Id, kind: "in" | "out", compDuration: number): Command {
+  return editLayer(layerId, kind === "in" ? "Remove animate in" : "Remove animate out", (layer) => {
+    const a = layer.inPoint ?? 0;
+    const b = layer.outPoint ?? compDuration;
+    let transform = layer.transform;
+    for (const prop of TOUCHED(kind)) {
+      const track = transform[prop];
+      const gone = new Set(presetKeys(track, kind, a, b));
+      if (gone.size === 0) continue;
+      const list = [...gone];
+      // "in" settles on its last key, "out" starts from its first.
+      const settled = (kind === "in" ? list[list.length - 1] : list[0])!.value;
+      const keys = track.keys.filter((k) => !gone.has(k));
+      transform = { ...transform, [prop]: { keys: keys.length ? keys : [{ id: `${layerId}.${prop}@0`, t: 0, value: settled }] } };
+    }
+    return transform === layer.transform ? layer : { ...layer, transform };
+  });
+}

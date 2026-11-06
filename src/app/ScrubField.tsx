@@ -10,6 +10,11 @@ export interface ScrubFieldProps {
   min?: number;
   max?: number;
   decimals?: number;
+  /** Compact form from the design: no label above, a short prefix (X, W, #) inside the field. The label stays as its accessible name. */
+  inline?: boolean;
+  prefix?: string;
+  /** Unit shown after the number (%, °, s). */
+  suffix?: string;
   /** Called on every drag step (show it without recording history). */
   onPreview: (v: number) => void;
   /** Called once when a drag ends or a typed value is entered (record it). */
@@ -65,8 +70,13 @@ export function ScrubField(p: ScrubFieldProps) {
   };
 
   return (
-    <div class="scrub" classList={{ editing: editing() }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
-      <span class="scrub-label">{p.label}</span>
+    <div class="scrub" classList={{ editing: editing(), inline: !!p.inline, pre: !!p.prefix, suf: !!p.suffix }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
+      <Show when={!p.inline}>
+        <span class="scrub-label">{p.label}</span>
+      </Show>
+      <Show when={p.prefix}>
+        <span class="scrub-pre" aria-hidden="true">{p.prefix}</span>
+      </Show>
       <input
         ref={input}
         type="number"
@@ -85,8 +95,8 @@ export function ScrubField(p: ScrubFieldProps) {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
       />
-      <Show when={!editing()}>
-        <span class="scrub-grip" aria-hidden="true">⇔</span>
+      <Show when={p.suffix}>
+        <span class="scrub-suf" aria-hidden="true">{p.suffix}</span>
       </Show>
     </div>
   );

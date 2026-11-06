@@ -10,7 +10,7 @@ page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 await page.goto(url);
 await page.waitForFunction(() => window.__rf);
-await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
+await page.getByRole("tab", { name: "Transform" }).click();
 const px = (cx, cy) => page.evaluate(async ([cx, cy]) => {
   window.__rf.frame();
   const { ctrl, renderer } = window.__rf; const m = ctrl.view;
@@ -23,20 +23,20 @@ const near = (a, b, tol = 12) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
 const report = (name, got, want) => console.log(`${name}: ${JSON.stringify(got)} want ~${JSON.stringify(want)} ${near(got, want) ? "OK" : "WRONG"}`);
 
 // 1. Shape (layer-1 is orange 250,184,51), static opacity 50%.
-await page.getByText("Rect", { exact: true }).click();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click();
 report("shape 100%", await px(960, 540), [250, 184, 51]);
-await field("Opacity %", 50);
+await field("Opacity percent", 50);
 report("shape 50% static", await px(960, 540), [252, 219, 153]);
 // 2. Animated opacity with auto-key: 100% at t=0, 20% at t=2 -> 60% at t=1.
-await field("Opacity %", 100);
-await page.getByLabel("Auto-key").check();
+await field("Opacity percent", 100);
+await page.getByRole("button", { name: "Auto-key off" }).click();
 await page.evaluate(() => window.__rf.ctrl.setTime(2));
-await field("Opacity %", 20);
+await field("Opacity percent", 20);
 for (const [t, a] of [[0, 1], [1, 0.6], [2, 0.2]]) {
   await page.evaluate((t) => window.__rf.ctrl.setTime(t), t);
   report(`shape animated t=${t} (opacity ${a})`, await px(960, 540), [255 - a * 5, 255 - a * 71, 255 - a * 204]);
 }
-await page.getByLabel("Auto-key").uncheck();
+await page.getByRole("button", { name: "Auto-key on" }).click();
 await page.evaluate(() => window.__rf.ctrl.setTime(0));
 
 // 3. Image: red quadrant at 50% over white.
@@ -44,7 +44,7 @@ await page.setInputFiles('input[accept="image/*"]', img);
 await page.waitForFunction(() => window.__rf.ctrl.document.layers.length === 2);
 await page.waitForTimeout(300);
 report("image 100% (red TL quadrant)", await px(744, 378), [255, 0, 0]);
-await field("Opacity %", 50);
+await field("Opacity percent", 50);
 report("image 50% (red over white)", await px(744, 378), [255, 128, 128]);
 
 // 4. Video (bitmap mode): bit 0 square is black, at 50% -> mid grey.
@@ -53,7 +53,7 @@ await page.setInputFiles('input[accept^="video"]', clip);
 await page.waitForFunction(() => window.__rf.ctrl.document.layers.length === 1, null, { timeout: 30000 });
 for (let i = 0; i < 60; i++) { await page.evaluate(() => window.__rf.frame()); const v = await px(48, 48); if (v[0] < 40) break; await page.waitForTimeout(40); }
 report("video 100% (black bit square)", await px(48, 48), [0, 0, 0]);
-await field("Opacity %", 50);
+await field("Opacity percent", 50);
 report("video 50% (black over white)", await px(48, 48), [128, 128, 128]);
 console.log("errors:", errors.length ? errors : "none");
 await browser.close();

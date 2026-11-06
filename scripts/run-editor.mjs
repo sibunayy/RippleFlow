@@ -30,7 +30,7 @@ const state = () => page.evaluate(() => {
   return { layers: c.document.layers.length, sel: c.selection, x: l?.transform.x.keys[0]?.value, y: l?.transform.y.keys[0]?.value, view: c.view.map((v) => +v.toFixed(3)) };
 });
 
-await page.getByText("Rect", { exact: true }).click();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click();
 await frame();
 const s0 = await state();
 const box = await page.locator("canvas").boundingBox();
@@ -40,7 +40,7 @@ const [cx, cy] = await page.evaluate(() => {
 });
 console.log("after add:", s0, "centre px", [cx, cy].map(Math.round), "box", box.width, box.height);
 console.log("centre pixel (expect red-ish):", await pixel(cx, cy));
-console.log("corner pixel (expect clear grey):", await pixel(5, 5));
+console.log("corner pixel (expect transparent: the stage dot grid shows around the composition):", await pixel(5, 5));
 
 // Pen drag 100 css px right.
 const px = box.x + cx, py = box.y + cy;

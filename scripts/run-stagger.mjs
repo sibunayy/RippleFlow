@@ -7,10 +7,10 @@ const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enab
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
 const errors = []; page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300);
-await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
+await page.getByRole("tab", { name: "Transform" }).click();
 await page.evaluate(() => { const d = window.__rf.ctrl.document; window.__rf.ctrl.replaceDocument({ ...d, background: [0, 0, 0, 1] }); });
 await page.locator('input[accept=".svg,image/svg+xml"]').setInputFiles("/tmp/rf-stagger.svg"); await page.waitForTimeout(500);
-await page.getByRole("group", { name: "Animate children" }).getByRole("button", { name: "Fade in" }).click();
+await page.getByRole("tab", { name: "Motion" }).click(); await page.getByLabel("Animate in preset").selectOption("fade-in");
 const lit = (t) => page.evaluate(async (t) => {
   const { ctrl, renderer } = window.__rf; ctrl.setSelection(null); ctrl.setTime(t); window.__rf.frame();
   const r = await renderer.readPixels(); let n = 0;

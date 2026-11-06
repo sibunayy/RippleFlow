@@ -11,7 +11,7 @@ The prototype stage is finished. Work now is bug fixing and feature refinement. 
 - Local-first PWA (OPFS + IndexedDB). iOS can evict storage, so export/backup bundles matter.
 - Export: MP4 H.264 via WebCodecs, up to 1080p60. Out: audio, pre-comps, Lottie, 4K, cloud sync.
 - Web, not native Swift (user's choice).
-- Visual identity is the RippleFlow design system (claude.ai artifact "RippleFlow"; tokens are CSS variables at the top of `src/app/theme.css`). Flat, dark, mint = selected, coral = time/recording, violet = geometry editing, 44px controls, nothing under 12px, no shadows/gradients/glow (except the stage dot grid). Read the artifact's `project/README.md` before restyling.
+- Visual identity and layout follow the claude.ai design canvas "RippleFlow on iPad 11 inch" (boards: Edit landscape 1180×820, Curves landscape, Motion sheet portrait 820×1180; tokens as CSS variables at the top of `src/app/app.css`). Flat, dark, mint = selected, coral = time/recording, violet = geometry editing, 44px controls, nothing under 12px, no shadows/gradients/glow (except the stage dot grid). Match those boards when restyling.
 
 ## Commands
 
@@ -48,8 +48,8 @@ scripts/ship.sh <branch> "<title>" "<body>"   # push, open PR via REST, wait for
 | MP4 export | `src/export/exportComposition.ts`, `encodeMp4.ts`; dialog `src/app/ExportDialog.tsx` |
 | Video/image media | `src/video/` (Mediabunny decode), `src/persist/assets.ts`, `src/app/images.ts` |
 | Save/load, projects, backup | `src/persist/` (`serialize`, `autosave`, `projects`, `bundle`, `store`); PWA/service worker `src/app/pwa.ts`, `scripts/sw-template.js` |
-| UI panels | `src/app/Editor.tsx` (shell, top bar, rail, popover), `Timeline.tsx`, `Style.tsx`, `Props.tsx`, `Effects.tsx`, `Compositing.tsx`, `Graph.tsx`, `CompSettings.tsx`, `ProjectsDialog.tsx`, `ScrubField.tsx` |
-| Look and layout | `src/app/theme.css` (design system; loaded after `app.css`, which holds structure). Portrait rules are the `@media (max-width: 900px)` block at the bottom |
+| UI panels | `src/app/Editor.tsx` (shell, top bar, rail + flyouts, stage selection/mode bar), `Inspector.tsx` (tabs; Transform and Motion tabs), `Style.tsx` (Style tab), `Effects.tsx`, `Compositing.tsx`, `Timeline.tsx` (transport, Keys view, ⋯ menu), `Curves.tsx` (Curves view, Easing select), `CompSettings.tsx`, `ProjectsDialog.tsx`, `ScrubField.tsx`, `icons.tsx` |
+| Look and layout | `src/app/app.css` (one stylesheet: tokens, landscape grid, then the portrait `@media (orientation: portrait), (max-width: 900px)` block near the bottom). Fonts come from `@fontsource` imports in `Editor.tsx` |
 | Touch/Pencil input maths | `src/input/` (pure) |
 
 Data flow in one line: `ctrl.execute(command)` → `Composition` (immutable) → `evaluateScene(comp, t)` → `SceneSync` + `layerDraws` (both in `src/app/sceneDraws.ts`) → `MeshRenderer`; export runs the same `evaluateScene` offscreen.
@@ -63,8 +63,8 @@ Track keys: transform props by name, effect params `fx:<effectId>:<name>`, trim 
 - Unit tests live beside the code (`*.test.ts`); keep them Node-only.
 - Browser checks are `scripts/run-<feature>.mjs "<url>?debug&noloop"`: they drive the real app with Playwright and read pixels back from an offscreen texture. Run the ones for the area you touched; `run-all-quick.sh` runs a representative set. Each script prints PASS/FAIL lines and `errors:`.
 - Start the dev server with `(npx vite --port 5199 >/tmp/vite.log 2>&1 &)`, use `NODE_PATH=$(npm root -g)` for Playwright, stop it with `pkill -f "vite --port 5199"`.
-- Scripts that need the Transform/align/presets popover click the "Transform" button first (it is closed by default). Auto-key is a checkbox labelled "Auto-key" inside the timeline pill.
-- Known failing before and after recent work: `scripts/run-pins.mjs`, `scripts/run-graph.mjs` (pre-existing, unrelated to styling). Fix them if you are in that area.
+- Inspector controls live in tabs: click `getByRole("tab", { name: "Style" | "Effects" | "Motion" })` first (Transform is the default). Shapes and media are in rail flyouts (`Shapes` button, then a `menuitem`). Auto-key is a button named "Auto-key off"/"Auto-key on". Number fields are named "Position X", "Scale width percent", "Rotation degrees", "Opacity percent". Undo/Redo are icon buttons named "Undo"/"Redo".
+- `run-pins.mjs` and `run-opacity.mjs` need a 400×400 quadrant PNG (red/green/blue/yellow) as their extra argument; `run-graph.mjs` now drives the Curves view. Portrait screenshots with the swiftshader flags can show panel-coloured bands over the stage (compositor artifact): judge portrait layout with a `--disable-gpu` browser.
 - Export changes: also run at 1080p (`PRESET="1080p · 30 fps"` for `run-export-app`, `run-image`, `run-video-layer`; `COMPAT=1` for compatibility mode) and check with ffprobe. Colour: expect native Y 235 of a white backdrop and `tv` range tags.
 
 ## Environment gotchas
@@ -86,8 +86,8 @@ Track keys: transform props by name, effect params `fx:<effectId>:<name>`, trim 
 
 ## Not verified on the iPad (only the user can). Do not claim these work
 
-Pencil feel and hit-target sizes in the editor, the pen tool with a real Pencil, 1080p60 export speed and heat, share sheet to Photos, standalone home-screen behaviour, palm rejection, HEVC/4K phone clips, the `importExternalTexture` video draw inside the editor (the standalone iPad spike did verify it), the video path with the pin vertex layout, and the new design-system look and portrait layout.
+Pencil feel and hit-target sizes in the editor, the pen tool with a real Pencil, 1080p60 export speed and heat, share sheet to Photos, standalone home-screen behaviour, palm rejection, HEVC/4K phone clips, the `importExternalTexture` video draw inside the editor (the standalone iPad spike did verify it), the video path with the pin vertex layout, and the redesigned layout (landscape and portrait sheet) on the device.
 
 ## Known gaps (candidates for the next work)
 
-Design system not fully applied: six-tool rail (Pins/Points still in the rail), double-stroked selection outline, inspector Tabs, bundled web fonts. Features not built: audio, pre-comps, clip slip, multi-select, per-property text animators, user-imported fonts, text on a path, canvas text editing, pin stiffness and video/shape warp, backdrop-copy blend modes (overlay etc.), points keyframing. Details per feature are in `docs/features.md`.
+Features not built: audio, pre-comps, clip slip, multi-select, per-property text animators, user-imported fonts, text on a path, canvas text editing, pin stiffness and video/shape warp, backdrop-copy blend modes (overlay etc.), points keyframing. Details per feature are in `docs/features.md`.

@@ -7,19 +7,19 @@ const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enab
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
 const errors = []; page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300);
-await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
-await page.getByRole("button", { name: "Rect", exact: true }).click();
+await page.getByRole("tab", { name: "Transform" }).click();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click();
 const pos = () => page.evaluate(() => { const l = window.__rf.ctrl.document.layers.at(-1); return [l.transform.x.keys.at(-1).value, l.transform.y.keys.at(-1).value]; });
-await page.getByRole("button", { name: "Align left" }).click();
+await page.getByLabel("Align to composition").selectOption("left");
 const a = await pos();
-await page.getByRole("button", { name: "Align bottom" }).click();
+await page.getByLabel("Align to composition").selectOption("bottom");
 const b = await pos();
 console.log(a[0] < 200 && b[1] > 800 ? "PASS" : "FAIL", "rect aligned left then bottom", JSON.stringify(a), JSON.stringify(b));
 await page.evaluate(() => { window.__rf.ctrl.undo(); window.__rf.ctrl.undo(); });
 // SVG group: its children's union box should be centred after "centre"
 await page.evaluate(() => window.__rf.ctrl.undo());
 await page.locator('input[accept=".svg,image/svg+xml"]').setInputFiles("/tmp/rf-align.svg"); await page.waitForTimeout(500);
-await page.getByRole("button", { name: "Align left" }).click();
+await page.getByLabel("Align to composition").selectOption("left");
 const edge = await page.evaluate(async () => {
   const { ctrl, renderer } = window.__rf; ctrl.setSelection(null); window.__rf.frame();
   const r = await renderer.readPixels(); let white = 1e9, red = 1e9;

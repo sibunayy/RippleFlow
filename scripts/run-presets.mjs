@@ -5,11 +5,10 @@ const browser = await chromium.launch({ args: ["--enable-unsafe-webgpu", "--enab
 const page = await (await browser.newContext({ viewport: { width: 1180, height: 900 } })).newPage();
 const errors = []; page.on("pageerror", (e) => errors.push(e.message));
 await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf); await page.waitForTimeout(300);
-await page.getByRole("button", { name: "Rect", exact: true }).click();
-await page.getByRole("button", { name: "Transform", exact: true }).click();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click();
 const op = (t) => page.evaluate((t) => { const c = window.__rf.ctrl; const k = c.document.layers[0].transform.opacity.keys; return k.length; }, t);
-await page.getByRole("button", { name: "Pop in", exact: true }).click();
-await page.getByRole("button", { name: "Fade out", exact: true }).click();
+await page.getByRole("tab", { name: "Motion" }).click(); await page.getByLabel("Animate in preset").selectOption("pop-in");
+await page.getByLabel("Animate out preset").selectOption("fade-out");
 const keys = await page.evaluate(() => window.__rf.ctrl.document.layers[0].transform.scaleX.keys.map((k) => [+k.t.toFixed(2), +k.value.toFixed(2)]));
 console.log("scaleX keys:", JSON.stringify(keys), "opacity keys:", await op());
 // Pixels: at t=0 the rect is invisible (scale 0), mid-span visible, then fully shown.

@@ -9,7 +9,7 @@ page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 await page.goto(process.argv[2]);
 await page.waitForFunction(() => window.__rf);
-await page.getByRole("button", { name: "Transform", exact: true }).click(); // the transform panel is tucked away by default
+await page.getByRole("tab", { name: "Transform" }).click();
 const val = (prop, t) => page.evaluate(([prop, t]) => {
   const l = window.__rf.ctrl.document.layers[0]; const k = l.transform[prop].keys;
   // evaluate like the engine: scene opacity for opacity, matrix for the rest is overkill; read the track directly
@@ -20,10 +20,10 @@ const val = (prop, t) => page.evaluate(([prop, t]) => {
 const keys = (prop) => page.evaluate((prop) => window.__rf.ctrl.document.layers[0].transform[prop].keys.map((k) => [+k.t.toFixed(2), +k.value.toFixed(3)]), prop);
 const setField = async (label, v) => { const f = page.getByLabel(label, { exact: true }); await f.fill(String(v)); await f.press("Enter"); };
 
-await page.getByText("Rect", { exact: true }).click();
-await page.getByLabel("Auto-key").check();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click();
+await page.getByRole("button", { name: "Auto-key off" }).click();
 await page.evaluate(() => window.__rf.ctrl.setTime(2));
-for (const [label, prop, v] of [["Rotate °", "rotation", 90], ["Opacity %", "opacity", 20], ["Scale W %", "scaleX", 200], ["X", "x", 1500]]) {
+for (const [label, prop, v] of [["Rotation degrees", "rotation", 90], ["Opacity percent", "opacity", 20], ["Scale width percent", "scaleX", 200], ["Position X", "x", 1500]]) {
   await setField(label, v);
   console.log(`${prop}: keys after editing at t=2 ->`, JSON.stringify(await keys(prop)), "| value at t=0:", (await val(prop, 0))?.toFixed(3), " t=1:", (await val(prop, 1))?.toFixed(3), " t=2:", (await val(prop, 2))?.toFixed(3));
 }

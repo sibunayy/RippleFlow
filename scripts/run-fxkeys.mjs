@@ -10,7 +10,7 @@ await page.goto(process.argv[2]);
 await page.waitForFunction(() => window.__rf);
 await page.waitForTimeout(800);
 const check = (n, ok, extra = "") => console.log(ok ? "PASS" : "FAIL", n, extra);
-await page.getByRole("button", { name: "Rect", exact: true }).click().catch(async () => { await page.getByRole("button", { name: /Rect|Shape/ }).first().click(); });
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click().catch(async () => { await page.getByRole("button", { name: /Rect|Shape/ }).first().click(); });
 const keys = () => page.locator(".tl-row .key").count();
 const before = await keys();
 await page.evaluate(() => {

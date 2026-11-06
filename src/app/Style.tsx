@@ -18,8 +18,6 @@ import {
   setStrokeEnabled,
   type FillMode,
 } from "../editor/styleEdit";
-import { Compositing } from "./Compositing";
-import { Effects } from "./Effects";
 import { setTrim, trimValue } from "../editor/trimEdit";
 import { ScrubField } from "./ScrubField";
 import { TextPanel } from "./TextPanel";
@@ -27,56 +25,79 @@ import { TextPanel } from "./TextPanel";
 const FILL_MODES: { id: FillMode; label: string }[] = [
   { id: "none", label: "None" },
   { id: "solid", label: "Solid" },
-  { id: "linear", label: "Linear" },
-  { id: "radial", label: "Radial" },
+  { id: "linear", label: "Linear gradient" },
+  { id: "radial", label: "Radial gradient" },
 ];
 const BLEND_LABEL: Record<BlendMode, string> = { normal: "Normal", multiply: "Multiply", screen: "Screen", add: "Add" };
 const JOINS = ["miter", "round", "bevel"] as const;
 const CAPS = ["butt", "round", "square"] as const;
 
 /** Colour swatch: native picker (works with Pencil), live preview while open, one undo step on close. */
-function Swatch(p: { label: string; color: () => Rgba; preview: (c: Rgba) => void; commit: (c: Rgba) => void }) {
+export function Swatch(p: { label: string; color: () => Rgba; preview: (c: Rgba) => void; commit: (c: Rgba) => void }) {
   return (
-    <label class="swatch">
-      <span class="scrub-label">{p.label}</span>
+    <input
+      class="swatch"
+      type="color"
+      aria-label={p.label}
+      value={rgbToHex(p.color())}
+      onInput={(e) => {
+        const c = hexToRgba(e.currentTarget.value, p.color()[3]);
+        if (c) p.preview(c);
+      }}
+      onChange={(e) => {
+        const c = hexToRgba(e.currentTarget.value, p.color()[3]);
+        if (c) p.commit(c);
+      }}
+    />
+  );
+}
+
+/** The colour as six hex digits, typed. */
+function HexField(p: { label: string; color: () => Rgba; commit: (c: Rgba) => void }) {
+  return (
+    <label class="field-in pre">
+      <span class="scrub-pre" aria-hidden="true">#</span>
       <input
-        type="color"
+        type="text"
+        inputmode="text"
+        autocapitalize="characters"
+        spellcheck={false}
         aria-label={p.label}
-        value={rgbToHex(p.color())}
-        onInput={(e) => {
-          const c = hexToRgba(e.currentTarget.value, p.color()[3]);
-          if (c) p.preview(c);
-        }}
+        value={rgbToHex(p.color()).slice(1).toUpperCase()}
         onChange={(e) => {
-          const c = hexToRgba(e.currentTarget.value, p.color()[3]);
+          const c = hexToRgba(`#${e.currentTarget.value.replace(/^#/, "").trim()}`, p.color()[3]);
           if (c) p.commit(c);
+          e.currentTarget.value = rgbToHex(p.color()).slice(1).toUpperCase();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
         }}
       />
     </label>
   );
 }
 
-function Seg<T extends string>(p: { label: string; value: () => T; options: readonly { id: T; label: string }[]; onPick: (v: T) => void }) {
+export function Select<T extends string>(p: { label: string; value: () => T; options: readonly { id: T; label: string }[]; onPick: (v: T) => void; class?: string }) {
   return (
-    <div class="seg" role="group" aria-label={p.label}>
-      <span class="scrub-label">{p.label}</span>
-      <div class="seg-row">
-        <For each={p.options}>
-          {(o) => (
-            <button classList={{ on: p.value() === o.id }} aria-pressed={p.value() === o.id} onClick={() => p.onPick(o.id)}>
-              {o.label}
-            </button>
-          )}
-        </For>
-      </div>
-    </div>
+    <select class={`sel ${p.class ?? ""}`} aria-label={p.label} onChange={(e) => p.onPick(e.currentTarget.value as T)}>
+      <For each={p.options}>{(o) => <option value={o.id} selected={p.value() === o.id}>{o.label}</option>}</For>
+    </select>
   );
 }
 
-/** Blend mode for any layer; fill, gradient and stroke for shape layers. */
-export function Style(props: { ctrl: EditorController; tick: () => number; notify: (msg: string) => void; open: () => boolean }) {
+/** On/off switch from the design (mint when on). */
+export function Switch(p: { label: string; on: () => boolean; set: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button type="button" class="switch" role="switch" aria-checked={p.on()} aria-label={p.label} disabled={p.disabled} onClick={() => p.set(!p.on())}>
+      <span />
+    </button>
+  );
+}
+
+/** Style tab: text, fill, blend, stroke and trim for the selected layer. */
+export function StyleTab(props: { ctrl: EditorController; tick: () => number; notify: (msg: string) => void; layer: () => Layer }) {
   const ctrl = props.ctrl;
-  const layer = (): Layer | undefined => (props.tick(), ctrl.document.layers.find((l) => l.id === ctrl.selection));
+  const l = props.layer;
   const run = (cmd: Command) => {
     try {
       ctrl.setPreview(null);
@@ -92,157 +113,175 @@ export function Style(props: { ctrl: EditorController; tick: () => number; notif
       /* an invalid intermediate value is simply not shown */
     }
   };
+  const id = () => l().id;
+  const shape = () => l().shape;
 
   return (
-    <Show when={props.open() ? layer() : undefined}>
-      {(l) => {
-        const id = () => l().id;
-        const shape = () => l().shape;
-        return (
-          <aside class="style" aria-label="Style">
-            <h3>Style · {l().name}</h3>
-            <div class="style-body">
-              <Seg
-                label="Blend"
-                value={() => l().blend ?? "normal"}
-                options={BLEND_MODES.map((m) => ({ id: m, label: BLEND_LABEL[m] }))}
-                onPick={(m) => run(setBlend(id(), m))}
-              />
-              <Show when={shape()}>
-                {(s) => (
-                  <>
-                    <div class="style-group">
-                      <Seg label="Fill" value={() => fillModeOf(s())} options={FILL_MODES} onPick={(m) => run(setFillMode(id(), m))} />
-                      <Show when={fillModeOf(s()) === "solid"}>
-                        <Swatch
-                          label="Colour"
-                          color={() => fillColorOf(s())}
-                          preview={(c) => preview(setFillColor(id(), c))}
-                          commit={(c) => run(setFillColor(id(), c))}
-                        />
+    <div class="tab-body">
+      <TextPanel ctrl={ctrl} tick={props.tick} layer={l} part="text" notify={props.notify} />
+      <div class="pair">
+        <Show when={shape()}>
+          {(s) => (
+            <div>
+              <span class="lab">Fill</span>
+              <Select label="Fill type" value={() => fillModeOf(s())} options={FILL_MODES} onPick={(m) => run(setFillMode(id(), m))} />
+            </div>
+          )}
+        </Show>
+        <div>
+          <span class="lab">Blend</span>
+          <Select label="Blend mode" value={() => l().blend ?? "normal"} options={BLEND_MODES.map((m) => ({ id: m, label: BLEND_LABEL[m] }))} onPick={(m) => run(setBlend(id(), m))} />
+        </div>
+      </div>
+      <Show when={shape()}>
+        {(s) => (
+          <>
+            <Show when={fillModeOf(s()) === "solid"}>
+              <div class="color-row">
+                <Swatch label="Fill colour" color={() => fillColorOf(s())} preview={(c) => preview(setFillColor(id(), c))} commit={(c) => run(setFillColor(id(), c))} />
+                <HexField label="Fill colour hex" color={() => fillColorOf(s())} commit={(c) => run(setFillColor(id(), c))} />
+                <ScrubField
+                  inline
+                  label="Fill alpha %"
+                  suffix="%"
+                  decimals={0}
+                  value={() => fillColorOf(s())[3] * 100}
+                  perPx={0.5}
+                  min={0}
+                  max={100}
+                  onPreview={(v) => preview(setFillColor(id(), withAlpha(fillColorOf(s()), v / 100)))}
+                  onCommit={(v) => run(setFillColor(id(), withAlpha(fillColorOf(s()), v / 100)))}
+                />
+              </div>
+            </Show>
+            <Show when={s().gradient}>
+              {(g) => (
+                <div class="group">
+                  <Show when={g().kind === "linear"}>
+                    <ScrubField label="Angle" suffix="°" inline prefix="∠" value={() => g().angle} perPx={1} onPreview={(v) => preview(setGradientAngle(id(), v))} onCommit={(v) => run(setGradientAngle(id(), v))} />
+                  </Show>
+                  <Index each={g().stops}>
+                    {(st, i) => (
+                      <div class="stop-row">
+                        <Swatch label={`Colour ${i + 1}`} color={() => st().color} preview={(c) => preview(setStopColor(id(), i, c))} commit={(c) => run(setStopColor(id(), i, c))} />
                         <ScrubField
-                          label="Alpha %"
-                          value={() => fillColorOf(s())[3] * 100}
+                          inline
+                          label={`Alpha ${i + 1} %`}
+                          suffix="%"
+                          decimals={0}
+                          value={() => st().color[3] * 100}
                           perPx={0.5}
                           min={0}
                           max={100}
-                          onPreview={(v) => preview(setFillColor(id(), withAlpha(fillColorOf(s()), v / 100)))}
-                          onCommit={(v) => run(setFillColor(id(), withAlpha(fillColorOf(s()), v / 100)))}
+                          onPreview={(v) => preview(setStopColor(id(), i, withAlpha(st().color, v / 100)))}
+                          onCommit={(v) => run(setStopColor(id(), i, withAlpha(st().color, v / 100)))}
                         />
-                      </Show>
-                      <Show when={s().gradient}>
-                        {(g) => (
-                          <>
-                            <Show when={g().kind === "linear"}>
-                              <ScrubField
-                                label="Angle °"
-                                value={() => g().angle}
-                                perPx={1}
-                                onPreview={(v) => preview(setGradientAngle(id(), v))}
-                                onCommit={(v) => run(setGradientAngle(id(), v))}
-                              />
-                            </Show>
-                            <div class="stops">
-                              <Index each={g().stops}>
-                                {(st, i) => (
-                                  <div class="stop">
-                                    <Swatch
-                                      label={`Colour ${i + 1}`}
-                                      color={() => st().color}
-                                      preview={(c) => preview(setStopColor(id(), i, c))}
-                                      commit={(c) => run(setStopColor(id(), i, c))}
-                                    />
-                                    <ScrubField
-                                      label={`Alpha ${i + 1} %`}
-                                      value={() => st().color[3] * 100}
-                                      perPx={0.5}
-                                      min={0}
-                                      max={100}
-                                      onPreview={(v) => preview(setStopColor(id(), i, withAlpha(st().color, v / 100)))}
-                                      onCommit={(v) => run(setStopColor(id(), i, withAlpha(st().color, v / 100)))}
-                                    />
-                                    <ScrubField
-                                      label={`Position ${i + 1} %`}
-                                      value={() => st().offset * 100}
-                                      perPx={0.5}
-                                      min={0}
-                                      max={100}
-                                      onPreview={(v) => preview(setStopOffset(id(), i, v / 100))}
-                                      onCommit={(v) => run(setStopOffset(id(), i, v / 100))}
-                                    />
-                                    <button class="mini" aria-label={`Add colour after ${i + 1}`} onClick={() => run(addStopAfter(id(), i))}>+</button>
-                                    <button class="mini" aria-label={`Remove colour ${i + 1}`} disabled={g().stops.length <= 2} onClick={() => run(removeStop(id(), i))}>×</button>
-                                  </div>
-                                )}
-                              </Index>
-                            </div>
-                          </>
-                        )}
-                      </Show>
-                    </div>
-                    <div class="style-group">
-                      <Seg
-                        label="Stroke"
-                        value={() => (s().stroke ? "on" : "off")}
-                        options={[{ id: "off", label: "None" }, { id: "on", label: "Stroke" }]}
-                        onPick={(v) => run(setStrokeEnabled(id(), v === "on"))}
+                        <ScrubField
+                          inline
+                          prefix="at"
+                          label={`Position ${i + 1} %`}
+                          suffix="%"
+                          decimals={0}
+                          value={() => st().offset * 100}
+                          perPx={0.5}
+                          min={0}
+                          max={100}
+                          onPreview={(v) => preview(setStopOffset(id(), i, v / 100))}
+                          onCommit={(v) => run(setStopOffset(id(), i, v / 100))}
+                        />
+                        <button class="icon-btn" aria-label={`Add colour after ${i + 1}`} onClick={() => run(addStopAfter(id(), i))}>+</button>
+                        <button class="icon-btn" aria-label={`Remove colour ${i + 1}`} disabled={g().stops.length <= 2} onClick={() => run(removeStop(id(), i))}>×</button>
+                      </div>
+                    )}
+                  </Index>
+                </div>
+              )}
+            </Show>
+            <div class="group">
+              <div class="lab-row">
+                <span class="lab">Stroke</span>
+                <Switch label="Stroke" on={() => !!s().stroke} set={(v) => run(setStrokeEnabled(id(), v))} />
+              </div>
+              <Show when={s().stroke}>
+                {(st) => (
+                  <>
+                    <div class="color-row">
+                      <Swatch
+                        label="Stroke colour"
+                        color={() => st().color}
+                        preview={(c) => preview(patchStroke(id(), "Stroke colour", { color: c }))}
+                        commit={(c) => run(patchStroke(id(), "Stroke colour", { color: c }))}
                       />
-                      <Show when={s().stroke}>
-                        {(st) => (
-                          <>
-                            <Swatch
-                              label="Stroke colour"
-                              color={() => st().color}
-                              preview={(c) => preview(patchStroke(id(), "Stroke colour", { color: c }))}
-                              commit={(c) => run(patchStroke(id(), "Stroke colour", { color: c }))}
-                            />
-                            <ScrubField
-                              label="Stroke alpha %"
-                              value={() => st().color[3] * 100}
-                              perPx={0.5}
-                              min={0}
-                              max={100}
-                              onPreview={(v) => preview(patchStroke(id(), "Stroke alpha", { color: withAlpha(st().color, v / 100) }))}
-                              onCommit={(v) => run(patchStroke(id(), "Stroke alpha", { color: withAlpha(st().color, v / 100) }))}
-                            />
-                            <ScrubField
-                              label="Width"
-                              value={() => st().width}
-                              perPx={0.25}
-                              min={0.5}
-                              max={400}
-                              onPreview={(v) => preview(patchStroke(id(), "Stroke width", { width: v }))}
-                              onCommit={(v) => run(patchStroke(id(), "Stroke width", { width: v }))}
-                            />
-                            <Seg label="Join" value={() => st().join ?? "miter"} options={JOINS.map((j) => ({ id: j, label: j }))} onPick={(j) => run(patchStroke(id(), "Stroke join", { join: j }))} />
-                            <Seg label="Cap" value={() => st().cap ?? "butt"} options={CAPS.map((c) => ({ id: c, label: c }))} onPick={(c) => run(patchStroke(id(), "Stroke cap", { cap: c }))} />
-                            <For each={["start", "end"] as const}>
-                              {(which) => (
-                                <ScrubField
-                                  label={which === "start" ? "Trim start %" : "Trim end %"}
-                                  value={() => (props.tick(), trimValue(s(), which, ctrl.time) * 100)}
-                                  perPx={0.4}
-                                  min={0}
-                                  max={100}
-                                  onPreview={(v) => preview(setTrim(id(), which, v / 100, ctrl.time, ctrl.autoKey))}
-                                  onCommit={(v) => run(setTrim(id(), which, v / 100, ctrl.time, ctrl.autoKey))}
-                                />
-                              )}
-                            </For>
-                          </>
+                      <HexField label="Stroke colour hex" color={() => st().color} commit={(c) => run(patchStroke(id(), "Stroke colour", { color: c }))} />
+                      <ScrubField
+                        inline
+                        prefix="px"
+                        label="Width"
+                        value={() => st().width}
+                        perPx={0.25}
+                        min={0.5}
+                        max={400}
+                        decimals={1}
+                        onPreview={(v) => preview(patchStroke(id(), "Stroke width", { width: v }))}
+                        onCommit={(v) => run(patchStroke(id(), "Stroke width", { width: v }))}
+                      />
+                    </div>
+                    <div class="pair">
+                      <Select
+                        label="Line join"
+                        value={() => st().join ?? "miter"}
+                        options={JOINS.map((j) => ({ id: j, label: `Join: ${j}` }))}
+                        onPick={(j) => run(patchStroke(id(), "Stroke join", { join: j }))}
+                      />
+                      <Select
+                        label="Line cap"
+                        value={() => st().cap ?? "butt"}
+                        options={CAPS.map((c) => ({ id: c, label: `Cap: ${c}` }))}
+                        onPick={(c) => run(patchStroke(id(), "Stroke cap", { cap: c }))}
+                      />
+                    </div>
+                    <div class="pair">
+                      <ScrubField
+                        inline
+                        label="Stroke alpha %"
+                        prefix="α"
+                        suffix="%"
+                        decimals={0}
+                        value={() => st().color[3] * 100}
+                        perPx={0.5}
+                        min={0}
+                        max={100}
+                        onPreview={(v) => preview(patchStroke(id(), "Stroke alpha", { color: withAlpha(st().color, v / 100) }))}
+                        onCommit={(v) => run(patchStroke(id(), "Stroke alpha", { color: withAlpha(st().color, v / 100) }))}
+                      />
+                    </div>
+                    <span class="lab">Trim path</span>
+                    <div class="pair">
+                      <For each={["start", "end"] as const}>
+                        {(which) => (
+                          <ScrubField
+                            inline
+                            prefix={which === "start" ? "Start" : "End"}
+                            suffix="%"
+                            decimals={1}
+                            label={which === "start" ? "Trim start %" : "Trim end %"}
+                            value={() => (props.tick(), trimValue(s(), which, ctrl.time) * 100)}
+                            perPx={0.4}
+                            min={0}
+                            max={100}
+                            onPreview={(v) => preview(setTrim(id(), which, v / 100, ctrl.time, ctrl.autoKey))}
+                            onCommit={(v) => run(setTrim(id(), which, v / 100, ctrl.time, ctrl.autoKey))}
+                          />
                         )}
-                      </Show>
+                      </For>
                     </div>
                   </>
                 )}
               </Show>
-              <TextPanel ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
-              <Compositing ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
-              <Effects ctrl={ctrl} tick={props.tick} layer={l} notify={props.notify} />
             </div>
-          </aside>
-        );
-      }}
-    </Show>
+          </>
+        )}
+      </Show>
+    </div>
   );
 }
