@@ -12,8 +12,8 @@ await page.waitForFunction(() => window.__rf);
 const frame = () => page.evaluate(() => window.__rf.frame());
 const keys = () => page.evaluate(() => window.__rf.ctrl.document.layers[0].transform.x.keys.map((k) => [+k.t.toFixed(3), +k.value.toFixed(1)]));
 
-await page.getByText("Star", { exact: true }).click();
-await page.getByLabel("Auto-key").check();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Star", exact: true }).click();
+await page.getByRole("button", { name: "Auto-key off" }).click();
 const pos = () => page.evaluate(() => { const c = window.__rf.ctrl; const m = c.view; const it = c.scene().find((i) => i.id === c.selection); const w = it.matrix; const cx = w[0] * 120 + w[2] * 120 + w[4], cy = w[1] * 120 + w[3] * 120 + w[5]; return [m[0] * cx + m[2] * cy + m[4], m[1] * cx + m[3] * cy + m[5]]; });
 const penDrag = async (dx) => {
   const [cx, cy] = await pos();
@@ -48,7 +48,7 @@ console.log("keys after retime +1s:", JSON.stringify(await keys()));
 const n = await page.locator(".key").count();
 const last = await page.locator(".key").nth(n - 1).boundingBox();
 await page.mouse.click(last.x + last.width / 2, last.y + last.height / 2);
-await page.getByText("Delete key").click();
+await page.getByRole("button", { name: "More layer actions" }).click(); await page.getByRole("menuitem", { name: "Delete keyframe" }).click();
 console.log("keys after delete:", JSON.stringify(await keys()));
 
 // Scrub via ruler.

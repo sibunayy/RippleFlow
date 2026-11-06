@@ -111,3 +111,45 @@ export function transformLayer(layerId: Id, delta: Affine, t: number, autoKey: b
   return { label, apply: (comp) => applyWorldDelta(comp, layerId, delta, t, autoKey) };
 }
 
+
+/** How a property's keyframe button shows at time `t`: a key sits here, it is animated elsewhere, or it is static. */
+export type KeyState = "here" | "animated" | "static";
+
+export function keyStateAt(track: Track, t: number): KeyState {
+  if (track.keys.length < 2) return "static";
+  return track.keys.some((k) => Math.abs(k.t - t) <= 1e-6) ? "here" : "animated";
+}
+
+/**
+ * The keyframe button next to a property: add a key holding the current value at `t`,
+ * or remove the key at `t`. A static property gains a base key at 0 too, so it animates
+ * from there; removing a key never empties a track.
+ */
+export function toggleKeyAt(layerId: Id, props: readonly EditableProp[], t: number): Command {
+  return {
+    label: "Toggle keyframe",
+    apply(comp) {
+      const layer = comp.layers.find((l) => l.id === layerId);
+      if (!layer) throw new Error(`Unknown layer ${layerId}`);
+      // Several props (X and Y) share one button: if any has a key here, the button removes them all.
+      const remove = props.some((p) => keyStateAt(layer.transform[p], t) === "here");
+      let transform: Transform = layer.transform;
+      for (const p of props) {
+        const track = layer.transform[p];
+        const value = propValue(layer, p, t);
+        if (remove) {
+          if (keyStateAt(track, t) !== "here") continue;
+          transform = { ...transform, [p]: { keys: track.keys.filter((k) => Math.abs(k.t - t) > 1e-6) } };
+        } else if (keyStateAt(track, t) !== "here") {
+          const id = `${layerId}.${p}@${t}`;
+          let next = writeTrack(track, t, value, true, id, value);
+          // At time 0 a static track would keep one key (no animation): hold the value to the end so later edits record.
+          if (next.keys.length < 2) next = { keys: [{ id, t, value }, { id: `${id}-end`, t: comp.duration, value }] };
+          transform = { ...transform, [p]: next };
+        }
+      }
+      if (transform === layer.transform) return comp;
+      return { ...comp, layers: comp.layers.map((l) => (l.id === layerId ? { ...layer, transform } : l)) };
+    },
+  };
+}

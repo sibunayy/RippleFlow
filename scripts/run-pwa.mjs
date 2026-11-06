@@ -31,7 +31,7 @@ offline.on("pageerror", (e) => errors.push("offline: " + e.message));
 await offline.goto(base + "?debug&noloop");
 await offline.waitForFunction(() => window.__rf, null, { timeout: 15000 });
 console.log("offline launch ok; layers:", await offline.evaluate(() => window.__rf.ctrl.document.layers.length), "| title:", await offline.title());
-await offline.getByText("Rect", { exact: true }).click();
+await offline.getByRole("button", { name: "Shapes" }).click(); await offline.getByRole("menuitem", { name: "Rect", exact: true }).click();
 console.log("offline edit ok; layers:", await offline.evaluate(() => window.__rf.ctrl.document.layers.length));
 await offline.close();
 await ctx.setOffline(false);

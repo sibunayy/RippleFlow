@@ -29,7 +29,7 @@ check("text layer added", !!l.text && l.text.text === "Hello" && l.shape.path.st
 const still = await lit(0);
 check("static text draws pixels", still > 2000, `(${still})`);
 
-await page.getByRole("button", { name: "+ Add", exact: true }).click();
+await page.getByRole("tab", { name: "Motion" }).click(); await page.getByRole("button", { name: "+ Add", exact: true }).click();
 l = await layer();
 check("animator added", l.text.animator?.unit === "char");
 const t0 = await lit(0), tMid = await lit(0.2), tEnd = await lit(2);
@@ -40,11 +40,12 @@ check("fully built at the end matches static text", Math.abs(tEnd - still) / sti
 await page.getByRole("button", { name: "Word", exact: true }).click();
 check("unit switched to word", (await layer()).text.animator.unit === "word");
 
+await page.getByRole("tab", { name: "Style" }).click();
 await page.locator(".text-input").fill("Hi there\nfriend");
 await page.locator(".text-input").blur();
 l = await layer();
 check("text edited, outline rebuilt", l.text.text === "Hi there\nfriend" && l.shape.path.length > 100);
-await page.getByText("Undo", { exact: true }).click();
+await page.getByRole("button", { name: "Undo" }).click();
 check("undo restores Hello", (await layer()).text.text === "Hello");
 
 // Saved and reloaded.

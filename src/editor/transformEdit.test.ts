@@ -3,7 +3,7 @@ import { multiply, rotate, scale, translate } from "../core/affine";
 import { evalTrack } from "../core/evaluate";
 import { worldMatrices } from "../core/layerTransform";
 import type { Composition, Layer, Track } from "../core/types";
-import { applyWorldDelta, decompose } from "./transformEdit";
+import { applyWorldDelta, decompose, keyStateAt, toggleKeyAt } from "./transformEdit";
 
 const track = (...vals: [number, number][]): Track => ({ keys: vals.map(([t, value], i) => ({ id: `k${i}`, t, value })) });
 const empty: Track = { keys: [] };
@@ -137,5 +137,30 @@ describe("auto-key on properties that start with no keys", () => {
     const base = comp({ ...l, transform: { ...l.transform, opacity: track([1, 0.5]) } });
     const c = setPropValue("a", "opacity", 0.9, 3, true).apply(base);
     expect(c.layers[0]!.transform.opacity.keys.map((k) => k.t)).toEqual([1, 3]);
+  });
+});
+
+describe("keyframe button", () => {
+  const base = (): Composition => ({ width: 100, height: 100, fps: 30, duration: 4, layers: [{ id: "a", name: "A", kind: "shape", shape: { path: "M0 0 H10 V10 Z" }, transform: { anchorX: { keys: [] }, anchorY: { keys: [] }, x: { keys: [{ id: "x0", t: 0, value: 5 }] }, y: { keys: [] }, scaleX: { keys: [] }, scaleY: { keys: [] }, rotation: { keys: [] }, opacity: { keys: [] } } }] });
+  it("adds a key at the playhead (and a base key at 0) on a static property", () => {
+    const c = toggleKeyAt("a", ["x"], 1).apply(base());
+    const x = c.layers[0]!.transform.x;
+    expect(x.keys.map((k) => [k.t, k.value])).toEqual([[0, 5], [1, 5]]);
+    expect(keyStateAt(x, 1)).toBe("here");
+    expect(keyStateAt(x, 2)).toBe("animated");
+  });
+  it("at time 0 holds the value to the end so the property counts as animated", () => {
+    const x = toggleKeyAt("a", ["x"], 0).apply(base()).layers[0]!.transform.x;
+    expect(x.keys.map((k) => k.t)).toEqual([0, 4]);
+  });
+  it("removes the key at the playhead, for every prop sharing the button", () => {
+    const once = toggleKeyAt("a", ["x", "y"], 1).apply(base());
+    expect(keyStateAt(once.layers[0]!.transform.y, 1)).toBe("here");
+    const twice = toggleKeyAt("a", ["x", "y"], 1).apply(once);
+    expect(twice.layers[0]!.transform.x.keys.map((k) => k.t)).toEqual([0]);
+    expect(twice.layers[0]!.transform.y.keys.map((k) => k.t)).toEqual([0]);
+  });
+  it("static with no keys reports static", () => {
+    expect(keyStateAt({ keys: [] }, 0)).toBe("static");
   });
 });

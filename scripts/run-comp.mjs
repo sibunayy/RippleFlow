@@ -8,7 +8,7 @@ await page.goto(process.argv[2]); await page.waitForFunction(() => window.__rf);
 const doc = () => page.evaluate(() => { const d = window.__rf.ctrl.document; return [d.width, d.height, d.fps, d.duration, d.background]; });
 const view = () => page.evaluate(() => [...window.__rf.ctrl.view]);
 const v0 = await view();
-await page.getByRole("button", { name: "Comp", exact: true }).click();
+await page.getByRole("button", { name: "Composition settings" }).click();
 await page.getByRole("button", { name: /9:16/ }).click();
 await page.getByRole("button", { name: "60 fps" }).click();
 await page.getByLabel("Length (s)").fill("4"); await page.getByLabel("Length (s)").press("Enter");

@@ -21,9 +21,9 @@ const drag = async (from, to) => {
 };
 const tap = async (p) => { const o = await ov(); await page.mouse.click(o.ox + p[0], o.oy + p[1]); };
 
-await page.getByText("Rect", { exact: true }).click();
-console.log("Points button enabled:", await page.getByRole("button", { name: "Points" }).isEnabled());
-await page.getByRole("button", { name: "Points" }).click();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click();
+console.log("Edit points offered:", await page.getByRole("button", { name: "Edit points" }).isEnabled());
+await page.getByRole("button", { name: "Edit points" }).click();
 let o = await ov();
 console.log("nodes:", o.nodes.length, "path:", await path());
 // Drag node 1 (top-right) by (-40,+30) screen px.
@@ -32,9 +32,9 @@ await drag([n1.x, n1.y], [n1.x - 40, n1.y + 30]);
 console.log("after drag:", await path());
 console.log("selected node:", (await ov()).nodes.findIndex((n) => n.selected));
 // Undo is one step.
-await page.getByText("Undo", { exact: true }).click();
+await page.getByRole("button", { name: "Undo" }).click();
 console.log("after undo:", await path());
-await page.getByText("Redo", { exact: true }).click();
+await page.getByRole("button", { name: "Redo" }).click();
 // Add a point by tapping the middle of the bottom edge.
 o = await ov();
 const [b0, b1] = [o.nodes[2], o.nodes[3]];
@@ -52,7 +52,7 @@ console.log("nodes after delete:", (await ov()).nodes.length);
 await tap([20, 20]);
 console.log("selected after empty tap:", (await ov()).nodes.findIndex((n) => n.selected));
 // Rendered shape follows the edited path: sample a pixel that should now be outside / inside.
-await page.getByRole("button", { name: "Points" }).click();
+await page.getByRole("button", { name: "Done" }).click();
 const px = (cx, cy) => page.evaluate(async ([cx, cy]) => { window.__rf.frame(); const r = await window.__rf.renderer.readPixels(); const i = (cy * r.width + cx) * 4; return [...r.data.slice(i, i + 3)]; }, [cx, cy]);
 console.log("centre pixel (shape colour expected):", await px(...(await page.evaluate(() => { const c = window.__rf.ctrl; return [Math.round(c.view[4] + c.view[0] * 960), Math.round(c.view[5] + c.view[3] * 540)]; }))));
 // Pan-with-finger still works in point mode: pointer type touch must not edit.

@@ -11,6 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/dm-mono": "^5.3.0",
+    "@fontsource/newsreader": "^5.3.0",
+    "@fontsource/schibsted-grotesk": "^5.3.0",
     "earcut": "^3.2.4",
     "mediabunny": "^1.65.2",
     "mp4-muxer": "^5.2.2",

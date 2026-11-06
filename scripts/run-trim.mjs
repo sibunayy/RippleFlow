@@ -34,8 +34,8 @@ check("nothing at start, half at 0.5s, full at 1s", a.n < b.n && b.n < c.n && Ma
 check("draws on from the left end", Math.abs(b.minX - c.minX) <= 1 && b.maxX < c.maxX);
 // the panel exposes the fields
 await page.evaluate(() => window.__rf.ctrl.setSelection("layer-1")); await page.waitForTimeout(200);
-if (!(await page.locator("aside.style").count())) await page.getByRole("button", { name: "Style", exact: true }).click();
-const fields = await page.getByText("Trim end %").count();
+await page.getByRole("tab", { name: "Style" }).click();
+const fields = await page.getByLabel("Trim end %").count();
 check("Style panel has trim fields", fields > 0);
 console.log("errors:", errors.length ? errors : "none");
 await browser.close();

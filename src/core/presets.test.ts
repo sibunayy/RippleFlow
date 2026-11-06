@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { evalTrack } from "./evaluate";
 import { History } from "./history";
-import { applyPreset, PRESETS } from "./presets";
+import { applyPreset, clearPreset, detectPreset, PRESETS } from "./presets";
+import { sequence } from "./commands";
 import { newShapeLayer } from "../app/shapes";
 import type { Composition } from "./types";
 
@@ -94,5 +95,30 @@ describe("staggered children", () => {
     expect(evalTrack(op("k1"), 3.75, 1)).toBeLessThan(1);
     expect(evalTrack(op("k1"), 3.4, 1)).toBe(1); // first child starts last
     expect(evalTrack(op("k2"), 3.0, 1)).toBe(1);
+  });
+});
+
+describe("preset detection", () => {
+  it("recognises each preset it wrote, in and out independently", () => {
+    for (const p of PRESETS) {
+      const c = run(p.id);
+      expect(detectPreset(L(c), p.kind, c.duration)).toBe(p.id);
+      expect(detectPreset(L(c), p.kind === "in" ? "out" : "in", c.duration)).toBeNull();
+    }
+  });
+  it("switching presets via clear + apply leaves only the new one", () => {
+    const pop = run("pop-in");
+    const c = sequence("swap", [clearPreset("layer-1", "in", 4), applyPreset("layer-1", "fade-in", 4)]).apply(pop);
+    expect(detectPreset(L(c), "in", 4)).toBe("fade-in");
+    expect(evalTrack(L(c).transform.scaleX, 0, 1)).toBe(1);
+  });
+  it("clearing returns the property to its settled value", () => {
+    const c = clearPreset("layer-1", "in", 4).apply(run("slide-up"));
+    expect(detectPreset(L(c), "in", 4)).toBeNull();
+    expect(evalTrack(L(c).transform.y, 0, 0)).toBe(540);
+    expect(evalTrack(L(c).transform.opacity, 0, 1)).toBe(1);
+  });
+  it("a hand-made animation is not a preset", () => {
+    expect(detectPreset(L(comp()), "in", 4)).toBeNull();
   });
 });

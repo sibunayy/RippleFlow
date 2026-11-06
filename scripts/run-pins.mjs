@@ -28,7 +28,7 @@ const pointer = (kind, x, y) => page.evaluate(([kind, x, y]) => window.__rf.ctrl
 const layerImage = () => page.evaluate(() => window.__rf.ctrl.document.layers[0].image);
 
 check("starts undeformed (red at 100,100; green at 300,100)", red(await colourAt(100, 100)) && green(await colourAt(300, 100)));
-await page.getByRole("button", { name: "Pins", exact: true }).click();
+await page.getByRole("button", { name: "Pin warp" }).click();
 const [sx, sy] = await toScreen(100, 100);
 await pointer("Down", sx, sy); await pointer("Up", sx, sy);
 let im = await layerImage();
@@ -40,10 +40,10 @@ im = await layerImage();
 check("drag sets the pin's pull", Math.abs(im.pins[0].dx.keys[0].value - 150) < 3, `dx=${im.pins[0].dx.keys[0]?.value}`);
 check("red was pulled over the green area", red(await colourAt(250, 100)));
 check("far corner untouched", await colourAt(390, 390).then((c) => c[0] > 200 && c[1] > 200 && c[2] < 60));
-await page.getByText("Undo", { exact: true }).click();
+await page.getByRole("button", { name: "Undo" }).click();
 im = await layerImage();
 check("undo returns the pin to no pull", (im.pins[0].dx.keys[0]?.value ?? 0) === 0 || im.pins[0].dx.keys.length === 0);
-await page.getByText("Redo", { exact: true }).click();
+await page.getByRole("button", { name: "Redo" }).click();
 // Keyframes: auto-key at 1s pulls further; at 0s the pull stays.
 await page.evaluate(() => { window.__rf.ctrl.autoKey = true; window.__rf.ctrl.setTime(1); });
 const [s2x, s2y] = await page.evaluate(() => 0).then(() => toScreen(250, 100));

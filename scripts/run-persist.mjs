@@ -14,20 +14,20 @@ const status = () => page.locator(".save").innerText();
 
 await open();
 console.log("fresh load layers:", JSON.stringify(await summary()), "status:", await status());
-await page.getByText("Star", { exact: true }).click();
-await page.getByText("Rect", { exact: true }).click();
-await page.getByLabel("Rotate °").fill("45"); await page.getByLabel("Rotate °").press("Enter");
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Star", exact: true }).click();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Rect", exact: true }).click();
+await page.getByLabel("Rotation degrees").fill("45"); await page.getByLabel("Rotation degrees").press("Enter");
 console.log("right after edit status:", await status());
 await page.waitForFunction(() => document.querySelector(".save").textContent === "Saved", null, { timeout: 5000 });
 console.log("after wait status:", await status());
 
 await open();
 console.log("after reload layers:", JSON.stringify(await summary()), "status:", await status());
-await page.getByText("Ellipse", { exact: true }).click();
+await page.getByRole("button", { name: "Shapes" }).click(); await page.getByRole("menuitem", { name: "Ellipse", exact: true }).click();
 console.log("new layer id after reload (expect layer-3):", await page.evaluate(() => window.__rf.ctrl.selection));
 
 // Edit then hide the page immediately: the flush on visibilitychange must save without waiting for the debounce.
-await page.getByLabel("Rotate °").fill("10"); await page.getByLabel("Rotate °").press("Enter");
+await page.getByLabel("Rotation degrees").fill("10"); await page.getByLabel("Rotation degrees").press("Enter");
 await page.evaluate(() => { Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true }); document.dispatchEvent(new Event("visibilitychange")); });
 await page.waitForTimeout(200);
 await open();

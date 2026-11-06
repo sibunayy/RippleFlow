@@ -21,7 +21,7 @@ const EASES: { label: string; ease: Bezier }[] = [
 const ALIGNS = ["left", "center", "right"] as const;
 
 /** Text content, look and per-character/word/line animator of the selected text layer. */
-export function TextPanel(props: { ctrl: EditorController; tick: () => number; layer: () => Layer; notify: (m: string) => void }) {
+export function TextPanel(props: { ctrl: EditorController; tick: () => number; layer: () => Layer; part?: "text" | "animator"; notify: (m: string) => void }) {
   const { ctrl } = props;
   const id = () => props.layer().id;
   const t = () => props.layer().text!;
@@ -59,6 +59,7 @@ export function TextPanel(props: { ctrl: EditorController; tick: () => number; l
   return (
     <Show when={props.layer().text}>
       <div class="style-group text-panel">
+        <Show when={props.part !== "animator"}>
         <span class="scrub-label">Text</span>
         <textarea
           class="text-input"
@@ -88,8 +89,10 @@ export function TextPanel(props: { ctrl: EditorController; tick: () => number; l
           </div>
         </div>
 
+        </Show>
+        <Show when={props.part !== "text"}>
         <div class="fx-head">
-          <span class="scrub-label">Animator</span>
+          <span class="scrub-label">Text animator</span>
           <button class="mini wide" onClick={() => run(anim() ? removeAnimator(id()) : editAnimator(id(), "Add text animator", (a) => a))}>
             {(props.tick(), anim() ? "Remove" : "+ Add")}
           </button>
@@ -128,6 +131,7 @@ export function TextPanel(props: { ctrl: EditorController; tick: () => number; l
           {num("Offset Y", () => (props.tick(), anim()?.from.dy ?? 0), 1, (v) => patchFrom("Animator offset Y", { dy: v }))}
           {num("Scale %", () => (props.tick(), (anim()?.from.scale ?? 1) * 100), 0.5, (v) => patchFrom("Animator scale", { scale: v / 100 }), { min: 0, max: 1000 })}
           {num("Rotate °", () => (props.tick(), anim()?.from.rotation ?? 0), 0.5, (v) => patchFrom("Animator rotation", { rotation: v }))}
+        </Show>
         </Show>
       </div>
     </Show>
