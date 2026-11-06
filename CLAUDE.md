@@ -20,7 +20,7 @@ npm run dev          # vite dev server
 npm run typecheck    # tsc --noEmit
 npm test             # vitest, Node only (see rule below)
 npm run build
-scripts/run-all-quick.sh   # typecheck + unit tests + the fast browser scripts (~5 min)
+scripts/run-all-quick.sh   # typecheck + unit tests + the fast browser scripts (~20 s, browser scripts run in parallel)
 scripts/ship.sh <branch> "<title>" "<body>"   # push, open PR via REST, wait for CI, squash-merge
 ```
 
