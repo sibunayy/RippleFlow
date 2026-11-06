@@ -43,7 +43,7 @@ scripts/ship.sh <branch> "<title>" "<body>"   # push, open PR via REST, wait for
 | Animation presets, text animator maths, effect specs | `src/core/presets.ts`, `src/core/text.ts`, `src/core/effects.ts` |
 | Editor state and pointer behaviour | `src/editor/controller.ts` (selection, auto-key, pen/points/pins modes, overlays). Tools: `selectTool.ts`, `penTool.ts`, `nodeTool.ts`, `handles.ts`, `hitTest.ts`. Pure edit helpers beside them (`styleEdit`, `effectEdit`, `maskEdit`, `trimEdit`, `align`, `keyframeEdit`, `easingEdit`) |
 | Shape → triangles | `src/geometry/layerGeometry.ts` (entry), `svgPath.ts`, `fill.ts`, `stroke.ts`, `trim.ts`, `warp.ts`, `lod.ts`; anchors/handles `nodes.ts`; SVG import `svgImport.ts` |
-| GPU drawing | `src/render/meshRenderer.ts` (main pass), `fxEngine.ts` (effects, masks, mattes group path), `videoQuad.ts`; scene → draws in `src/app/sceneDraws.ts` |
+| GPU drawing | `src/render/meshRenderer.ts` (main pass), `fxEngine.ts` (effects, masks, mattes group path); scene → draws in `src/app/sceneDraws.ts` |
 | Text outlines and fonts | `src/text/glyphs.ts` (layout), `fonts.ts` (registry), `textEdit.ts`; panel `src/app/TextPanel.tsx` |
 | MP4 export | `src/export/exportComposition.ts`, `encodeMp4.ts`; dialog `src/app/ExportDialog.tsx` |
 | Video/image media | `src/video/` (Mediabunny decode), `src/persist/assets.ts`, `src/app/images.ts` |
