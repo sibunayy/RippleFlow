@@ -40,10 +40,25 @@ interface PlacedChar {
 type Glyph = ReturnType<Font["charToGlyph"]>;
 
 /** Lay out the text with the loaded font. Top-left of the first line's em box is (0, 0). */
+const r2 = (v: number) => String(Math.round(v * 100) / 100);
+/** opentype.js's own toPathData(2) emits "NaN" for some float values (its decimal rounding goes through exponent strings); this does not. */
+export function pathData(cmds: readonly { type: string; x?: number; y?: number; x1?: number; y1?: number; x2?: number; y2?: number }[]): string {
+  const out: string[] = [];
+  for (const c of cmds) {
+    if (c.type === "Z") out.push("Z");
+    else if (c.type === "M" || c.type === "L") out.push(`${c.type}${r2(c.x!)} ${r2(c.y!)}`);
+    else if (c.type === "Q") out.push(`Q${r2(c.x1!)} ${r2(c.y1!)} ${r2(c.x!)} ${r2(c.y!)}`);
+    else if (c.type === "C") out.push(`C${r2(c.x1!)} ${r2(c.y1!)} ${r2(c.x2!)} ${r2(c.y2!)} ${r2(c.x!)} ${r2(c.y!)}`);
+  }
+  return out.join("");
+}
+
 export function layoutText(content: TextContent, font: Font | undefined = loaded.get(content.font ?? DEFAULT_FONT)): TextLayout {
   if (!font) return { path: "", units: [] };
   const k = content.size / font.unitsPerEm;
   const lineHeight = content.size * 1.2;
+  // Some fonts (Pacifico) report no usable ascender; fall back through the OS/2 and glyph-bounds metrics.
+  const ascent = [font.ascender, (font.tables as any)?.os2?.sTypoAscender, (font.tables as any)?.hhea?.ascender].find((v) => Number.isFinite(v) && v > 0) ?? font.unitsPerEm * 0.8;
 
   // Pass 1: positions along each line.
   let offset = 0;
@@ -53,8 +68,11 @@ export function layoutText(content: TextContent, font: Font | undefined = loaded
     const chars: { index: number; x: number; adv: number; glyph: Glyph }[] = [];
     for (let i = 0; i < line.length; i++) {
       const glyph = font.charToGlyph(line[i]!);
-      if (prev) x += font.getKerningValue(prev, glyph) * k;
-      const adv = (glyph.advanceWidth ?? 0) * k;
+      if (prev) {
+        const kern = font.getKerningValue(prev, glyph) * k;
+        if (Number.isFinite(kern)) x += kern;
+      }
+      const adv = Number.isFinite(glyph.advanceWidth) ? glyph.advanceWidth! * k : 0;
       chars.push({ index: offset + i, x, adv, glyph });
       x += adv + content.tracking;
       prev = glyph;
@@ -68,11 +86,15 @@ export function layoutText(content: TextContent, font: Font | undefined = loaded
   const placed: PlacedChar[] = [];
   lines.forEach((line, li) => {
     const shift = content.align === "center" ? (maxW - line.width) / 2 : content.align === "right" ? maxW - line.width : 0;
-    const baseline = font.ascender * k + li * lineHeight;
+    const baseline = ascent * k + li * lineHeight;
     for (const c of line.chars) {
       const x = c.x + shift;
-      placed.push({ index: c.index, x, adv: c.adv, baseline, d: c.glyph.getPath(x, baseline, content.size).toPathData(2) });
+      placed.push({ index: c.index, x, adv: c.adv, baseline, d: pathData(c.glyph.getPath(x, baseline, content.size).commands) });
     }
+  });
+  // A glyph whose outline has non-finite numbers would make the whole path unparsable; draw nothing for it.
+  placed.forEach((c, i) => {
+    if (/NaN|Infinity/.test(c.d)) placed[i] = { ...c, d: "" };
   });
   const byIndex = new Map(placed.map((c) => [c.index, c]));
   const join = (cs: readonly PlacedChar[]) => cs.map((c) => c.d).filter((d) => d !== "").join(" ");
