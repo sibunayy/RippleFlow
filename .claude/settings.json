@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./node_modules/**)",
+      "Read(./dist/**)",
+      "Read(./package-lock.json)",
+      "Read(./src/text/fonts/**)",
+      "Read(./public/**)",
+      "Read(./docs/*.png)",
+      "Read(./**/*.mp4)",
+      "Read(./**/*.woff)",
+      "Read(./**/*.woff2)",
+      "Read(./**/*.ttf)"
+    ]
+  }
+}

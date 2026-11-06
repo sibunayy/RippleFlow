@@ -8,3 +8,7 @@ dist
 .vscode/
 .github/copilot-instructions.md
 .mcp.json
+.claude/settings.local.json
+.DS_Store
+dist-ssr
+*.tsbuildinfo
