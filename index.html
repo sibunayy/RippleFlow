@@ -11,15 +11,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <title>RippleFlow</title>
-    <style>
-      /* iOS/iPadOS 27 draws a progressive blur over the top edge of standalone PWAs. WebKit
-         suppresses it when a real fixed element (>=6px tall, >=80% wide, within 4px of the top)
-         sits there, so this strip matches --ink. Must not be a pseudo-element. */
-      .ios27-edge { position: fixed; top: 0; left: 10%; width: 80%; height: 6px; background: #0a0e1a; pointer-events: none; z-index: 2147483647; }
-    </style>
   </head>
   <body>
-    <div class="ios27-edge" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/app/main.tsx"></script>
   </body>
